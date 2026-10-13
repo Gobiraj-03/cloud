@@ -4,6 +4,7 @@
 [![Budget Constraint](https://img.shields.io/badge/Budget-₹0_Strict-green.svg)](#)
 [![Academic Project](https://img.shields.io/badge/Course-Cloud_Computing_Capstone-orange.svg)](#)
 [![Node Version](https://img.shields.io/badge/Node.js-v22.15.1-brightgreen.svg)](#)
+[![Backend Tests](https://img.shields.io/badge/Backend_Tests-11%20Passed-brightgreen.svg)](#)
 
 A secure, full-stack enterprise web application designed for small-to-medium organizations and IT administrators to manage the complete lifecycle of physical IT hardware assets and track software license seat allocations, compliance, and upcoming renewal expirations.
 
@@ -23,23 +24,11 @@ This system provides a centralized, auditable, and responsive web platform that 
 
 ---
 
-## 2. Core Capabilities
-
-- **Administrator Authentication**: Secure, salted password hashing (bcrypt), token-based authorization, and protected administrative routes.
-- **Interactive Dashboard**: Real-time asset counts by status (Available, Assigned, In Maintenance, Retired), software utilization percentages, 30-day expiry counts, and live database charts.
-- **Hardware Asset Lifecycle Management**: Unique asset tags, serial numbers, procurement cost, warranty tracking, category filters, and state machine transitions.
-- **Employee Custody & History**: Employee directory, asset assignment, asset return, and an immutable assignment history log that is never erased upon reassignment.
-- **Software License Tracking**: Seat allocation tracking, utilization percentages, over-allocation prevention (`used <= total`), and support for subscription and perpetual licenses.
-- **Proactive Expiry Alerts**: Visual alerts for software subscriptions and hardware warranties expiring within 30 days, plus a manual on-demand check for viva demonstrations.
-- **Reporting & Data Export**: Filtered asset inventory, employee custody, and license compliance reports with instant CSV export.
-
----
-
-## 3. Two-Stage Architectural Blueprint
+## 2. Two-Stage Architectural Blueprint
 
 ```
 +--------------------------------------------------------------------------------------------------+
-| STAGE A: LOCAL DEVELOPMENT (CURRENT)                                                             |
+| STAGE A: LOCAL DEVELOPMENT (VERIFIED ZERO-COST BASELINE)                                         |
 | React (Vite) [Port 5173] ---> Express REST API [Port 5000] ---> Local SQLite (data/asset_mgmt.db) |
 | - Zero external cloud cost (₹0.00)                                                              |
 | - Layered architecture (Routes -> Controllers -> Services -> Repositories)                      |
@@ -54,6 +43,68 @@ This system provides a centralized, auditable, and responsive web platform that 
 | - CloudWatch for logs and a strict $0.01 billing alert                                           |
 | - BLOCKED: Will only be deployed if account free-tier eligibility is empirically confirmed      |
 +--------------------------------------------------------------------------------------------------+
+```
+
+---
+
+## 3. Quickstart Guide (Windows PowerShell)
+
+### 3.1 Prerequisites
+- **Node.js** v22.15.1+ and **npm** 10.9.2+ installed.
+- **Windows PowerShell** terminal.
+
+### 3.2 Backend Setup & Execution Commands
+
+Open Windows PowerShell in the project root (`d:\cloud`):
+
+```powershell
+# 1. Navigate to the backend directory
+cd d:\cloud\backend
+
+# 2. Install dependencies (if not already installed)
+npm install
+
+# 3. Initialize SQLite database schema (7 tables and indexes)
+npm run db:migrate
+
+# 4. Seed realistic, idempotent demonstration data
+npm run db:seed
+
+# Alternatively: Execute migration and seeding in a single command
+npm run db:setup
+
+# 5. Execute automated test suite (11 unit and integration tests)
+npm test
+
+# 6. Start the Express backend server
+npm run dev
+# (or: npm start)
+```
+
+The backend server listens on `http://localhost:5000`.
+
+### 3.3 Verify System Health via HTTP
+
+In a separate PowerShell terminal:
+```powershell
+# Query the live health check endpoint
+Invoke-RestMethod -Uri http://localhost:5000/api/health
+```
+
+Expected output:
+```json
+{
+  "status": "UP",
+  "healthy": true,
+  "timestamp": "2026-10-13T16:44:58.408Z",
+  "environment": "development",
+  "uptimeSeconds": 16,
+  "database": {
+    "status": "CONNECTED",
+    "engine": "SQLite 3",
+    "tablesFound": 7
+  }
+}
 ```
 
 ---
@@ -84,17 +135,8 @@ Detailed architectural and engineering documentation is maintained in the `docs/
 
 ## 6. Implementation Status
 
-| Module | Status | Next Steps |
+| Module | Status | Deliverables |
 | :---: | :---: | :--- |
 | **Module 0** | **COMPLETED** | Planning, architecture, data modeling, cost guardrails, and repo setup. |
-| **Module 1** | *Awaiting Authorization* | Database schema, SQLite initialization, repository layer, backend foundation. |
-
----
-
-## 7. Technology Stack Summary
-
-- **Frontend**: React (Vite), Modern Vanilla CSS / Tailwind CSS, Recharts, Lucide Icons.
-- **Backend**: Node.js (v22.15.1), Express.js, RESTful JSON API.
-- **Database**: SQLite 3 (Stage A Local) / PostgreSQL on Amazon RDS (Stage B Cloud).
-- **Security**: bcrypt password hashing, JWT authentication, parameterized SQL queries.
-- **Version Control**: Git (`2.45.2.windows.1`) with comprehensive `.gitignore`.
+| **Module 1** | **COMPLETED** | Database schema, SQLite migrations, idempotent seed data, repository layer, health API, 11 tests passed. |
+| **Module 2** | *Awaiting Authorization* | Administrator authentication, bcrypt password hashing, and JWT authorization. |

@@ -2,11 +2,11 @@
 
 ## 1. Relational Model Overview
 
-The database design adheres to 3rd Normal Form (3NF) principles while maintaining referential integrity, indexing for high-frequency queries, and auditability.
+The database design adheres to 3rd Normal Form (3NF) principles while maintaining strict referential integrity, indexing for high-frequency queries, and immutable auditability.
 
 All table designs are created with **dialect portability** in mind:
-- **Development Engine**: SQLite 3 (using parameterized SQL queries).
-- **Target Cloud Engine**: Amazon RDS PostgreSQL (without altering application-level business logic).
+- **Development Engine**: SQLite 3 (using parameterized SQL queries and `PRAGMA foreign_keys = ON;`).
+- **Target Cloud Engine**: Amazon RDS PostgreSQL (convertible without altering application-level business logic).
 
 ---
 
@@ -41,20 +41,20 @@ All table designs are created with **dialect portability** in mind:
                       +---+---------------+---+
                           |               |
          +----------------+               +----------------+
-         | 1:N                            | 1:N            |
+         | 1:N (RESTRICT)                 | 1:N (RESTRICT) |
          v                                v                |
 +--------------------------+    +-----------------------+  |
 | asset_assignment_history |    |  license_allocations  |  |
 +--------------------------+    +-----------------------+  |
 | PK  id                   |    | PK  id                |  |
-| FK  asset_id             |    | FK  license_id        |  |
+| FK  asset_id (RESTRICT)  |    | FK  license_id        |  |
 | FK  employee_id          |    | FK  employee_id (opt) |  |
 |     action               |    | FK  asset_id (opt)    |  |
 |     action_date          |    |     allocated_at      |  |
 | FK  performed_by_admin   |    +-----------^-----------+  |
 |     notes                |                |              |
 +-------------^------------+                |              |
-              | 1:N                         | N:1          |
+              | 1:N (RESTRICT)              | N:1          |
 +-------------+------------+    +-----------+-----------+  |
 |          assets          |    |   software_licenses   |  |
 +--------------------------+    +-----------------------+  |
@@ -75,142 +75,176 @@ All table designs are created with **dialect portability** in mind:
 
 ---
 
-## 3. Detailed Table Specifications
+## 3. Implemented DDL Table Specifications (Module 1)
 
 ### 3.1 `administrators`
-Stores credentials for authorized IT operators. Registration is restricted in production.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique admin identifier |
-| `username` | VARCHAR(50) | NOT NULL, UNIQUE | Admin login username |
-| `email` | VARCHAR(100) | NOT NULL, UNIQUE | Official admin email address |
-| `password_hash` | VARCHAR(255) | NOT NULL | Argon2 / bcrypt hashed password (salt included) |
-| `full_name` | VARCHAR(100) | NOT NULL | Real name of administrator |
-| `role` | VARCHAR(20) | NOT NULL DEFAULT 'SUPERADMIN' | Access role ('SUPERADMIN', 'OPERATOR') |
-| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Account creation date |
-| `last_login` | DATETIME | NULL | Timestamp of most recent successful authentication |
+Stores credentials for authorized IT operators. Password hashes use salted bcrypt (never plaintext).
+```sql
+CREATE TABLE IF NOT EXISTS administrators (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'SUPERADMIN' CHECK (role IN ('SUPERADMIN', 'OPERATOR')),
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    last_login TEXT NULL
+);
+```
 
 ---
 
 ### 3.2 `employees`
-Directory of corporate staff eligible to receive hardware assets and software allocations.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique internal ID |
-| `employee_code` | VARCHAR(20) | NOT NULL, UNIQUE | Corporate identifier (e.g., `EMP-1001`) |
-| `first_name` | VARCHAR(50) | NOT NULL | Employee given name |
-| `last_name` | VARCHAR(50) | NOT NULL | Employee surname |
-| `email` | VARCHAR(100) | NOT NULL, UNIQUE | Corporate email address |
-| `department` | VARCHAR(50) | NOT NULL | Department (e.g., Engineering, HR, Finance) |
-| `designation` | VARCHAR(50) | NOT NULL | Job title (e.g., Senior Systems Analyst) |
-| `status` | VARCHAR(20) | NOT NULL DEFAULT 'ACTIVE' | Status: `ACTIVE`, `ON_LEAVE`, `TERMINATED` |
-| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
-| `updated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Last modification timestamp |
+Directory of corporate personnel eligible to receive assets and licenses.
+```sql
+CREATE TABLE IF NOT EXISTS employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_code TEXT NOT NULL UNIQUE,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    department TEXT NOT NULL,
+    designation TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'ON_LEAVE', 'TERMINATED')),
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    updated_at TEXT NOT NULL DEFAULT (DATETIME('now'))
+);
+```
 
 ---
 
 ### 3.3 `assets`
-Primary registry for physical computing hardware.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique internal asset ID |
-| `asset_tag` | VARCHAR(30) | NOT NULL, UNIQUE | Scannable enterprise barcode/tag (e.g., `AST-2026-0042`) |
-| `serial_number` | VARCHAR(60) | UNIQUE, NULL | Manufacturer hardware serial number |
-| `name` | VARCHAR(100) | NOT NULL | Common asset description (e.g., `ThinkPad T14 Gen 4`) |
-| `category` | VARCHAR(30) | NOT NULL | Enum: `LAPTOP`, `DESKTOP`, `MONITOR`, `PRINTER`, `NETWORKING`, `MOBILE`, `OTHER` |
-| `manufacturer` | VARCHAR(50) | NOT NULL | OEM vendor (e.g., `Lenovo`, `Dell`, `Cisco`) |
-| `model` | VARCHAR(50) | NOT NULL | Device model number / version |
-| `purchase_date` | DATE | NOT NULL | Procurement date |
-| `purchase_cost` | DECIMAL(10,2) | NOT NULL DEFAULT 0.00 | Procurement price in INR (₹) |
-| `warranty_expiry`| DATE | NULL | Date on which OEM warranty expires |
-| `status` | VARCHAR(25) | NOT NULL DEFAULT 'AVAILABLE' | Enum: `AVAILABLE`, `ASSIGNED`, `UNDER_MAINTENANCE`, `RETIRED` |
-| `current_employee_id` | INTEGER | NULL, REFERENCES `employees(id)` | Current assignee (NULL if `AVAILABLE`, `UNDER_MAINTENANCE`, or `RETIRED`) |
-| `notes` | TEXT | NULL | Administrative remarks, repair notes, or accessories included |
-| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
-| `updated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Last modification timestamp |
+Primary registry for physical computing hardware. Implements a multi-column check constraint ensuring status and employee assignment invariants.
+```sql
+CREATE TABLE IF NOT EXISTS assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_tag TEXT NOT NULL UNIQUE,
+    serial_number TEXT UNIQUE,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('LAPTOP', 'DESKTOP', 'MONITOR', 'PRINTER', 'NETWORKING', 'MOBILE', 'OTHER')),
+    manufacturer TEXT NOT NULL,
+    model TEXT NOT NULL,
+    purchase_date TEXT NOT NULL,
+    purchase_cost REAL NOT NULL DEFAULT 0.00 CHECK (purchase_cost >= 0),
+    warranty_expiry TEXT NULL,
+    status TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK (status IN ('AVAILABLE', 'ASSIGNED', 'UNDER_MAINTENANCE', 'RETIRED')),
+    current_employee_id INTEGER NULL,
+    notes TEXT NULL,
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    updated_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    FOREIGN KEY (current_employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
+    CHECK (
+        (status = 'ASSIGNED' AND current_employee_id IS NOT NULL) OR
+        (status != 'ASSIGNED' AND current_employee_id IS NULL)
+    )
+);
+```
 
 ---
 
 ### 3.4 `asset_assignment_history`
 Immutable audit log recording every custody change, maintenance transit, and asset retirement.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique log entry ID |
-| `asset_id` | INTEGER | NOT NULL, REFERENCES `assets(id)` | Asset affected |
-| `employee_id` | INTEGER | NULL, REFERENCES `employees(id)` | Recipient or returning employee |
-| `action` | VARCHAR(30) | NOT NULL | Action: `ASSIGNED`, `RETURNED`, `SENT_TO_MAINTENANCE`, `RETURNED_FROM_MAINTENANCE`, `RETIRED` |
-| `action_date` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Exact date and time of the transaction |
-| `performed_by_admin_id` | INTEGER | NOT NULL, REFERENCES `administrators(id)` | Authenticated administrator executing action |
-| `notes` | TEXT | NULL | Reason for return, damage report, or ticket reference |
+```sql
+CREATE TABLE IF NOT EXISTS asset_assignment_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id INTEGER NOT NULL,
+    employee_id INTEGER NULL,
+    action TEXT NOT NULL CHECK (action IN ('ASSIGNED', 'RETURNED', 'SENT_TO_MAINTENANCE', 'RETURNED_FROM_MAINTENANCE', 'RETIRED')),
+    action_date TEXT NOT NULL DEFAULT (DATETIME('now')),
+    performed_by_admin_id INTEGER NULL,
+    notes TEXT NULL,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE RESTRICT,
+    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
+    FOREIGN KEY (performed_by_admin_id) REFERENCES administrators(id) ON DELETE SET NULL
+);
+```
 
 ---
 
 ### 3.5 `software_licenses`
-Registry for software suites, cloud subscriptions, and volume license agreements.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Unique license ID |
-| `license_code` | VARCHAR(40) | NOT NULL, UNIQUE | Enterprise reference code (e.g., `LIC-JETBRAINS-2026`) |
-| `software_name` | VARCHAR(100) | NOT NULL | Application title (e.g., `JetBrains All Products Pack`) |
-| `vendor` | VARCHAR(60) | NOT NULL | Software vendor (e.g., `JetBrains`, `Microsoft`, `Adobe`) |
-| `license_type` | VARCHAR(30) | NOT NULL | Type: `PERPETUAL`, `ANNUAL_SUBSCRIPTION`, `MONTHLY_SUBSCRIPTION`, `VOLUME_SEAT`, `OEM` |
-| `total_quantity` | INTEGER | NOT NULL CHECK (`total_quantity` > 0) | Total licensed seats purchased |
-| `used_quantity` | INTEGER | NOT NULL DEFAULT 0 CHECK (`used_quantity` >= 0 AND `used_quantity` <= `total_quantity`) | Currently allocated seats |
-| `purchase_date` | DATE | NOT NULL | Date license was procured or renewed |
-| `expiry_date` | DATE | NULL | Expiration date (NULL for Perpetual licenses) |
-| `purchase_cost` | DECIMAL(10,2) | NOT NULL DEFAULT 0.00 | Cost incurred in INR (₹) |
-| `renewal_status` | VARCHAR(25) | NOT NULL DEFAULT 'ACTIVE' | Status: `ACTIVE`, `EXPIRING_SOON`, `EXPIRED`, `CANCELLED` |
-| `notes` | TEXT | NULL | License key details, contract reference, PO numbers |
-| `created_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Record creation timestamp |
-| `updated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Last modification timestamp |
+Registry for software suites, cloud subscriptions, and volume license agreements with seat bounds.
+```sql
+CREATE TABLE IF NOT EXISTS software_licenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    license_code TEXT NOT NULL UNIQUE,
+    software_name TEXT NOT NULL,
+    vendor TEXT NOT NULL,
+    license_type TEXT NOT NULL CHECK (license_type IN ('PERPETUAL', 'ANNUAL_SUBSCRIPTION', 'MONTHLY_SUBSCRIPTION', 'VOLUME_SEAT', 'OEM')),
+    total_quantity INTEGER NOT NULL CHECK (total_quantity > 0),
+    used_quantity INTEGER NOT NULL DEFAULT 0 CHECK (used_quantity >= 0 AND used_quantity <= total_quantity),
+    purchase_date TEXT NOT NULL,
+    expiry_date TEXT NULL,
+    purchase_cost REAL NOT NULL DEFAULT 0.00 CHECK (purchase_cost >= 0),
+    renewal_status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (renewal_status IN ('ACTIVE', 'EXPIRING_SOON', 'EXPIRED', 'CANCELLED')),
+    notes TEXT NULL,
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    updated_at TEXT NOT NULL DEFAULT (DATETIME('now'))
+);
+```
 
 ---
 
 ### 3.6 `license_allocations`
 Tracks the exact assignment of individual license seats to specific employees or hardware assets.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Allocation record ID |
-| `license_id` | INTEGER | NOT NULL, REFERENCES `software_licenses(id)` | Parent license record |
-| `employee_id` | INTEGER | NULL, REFERENCES `employees(id)` | Employee user (if user-assigned) |
-| `asset_id` | INTEGER | NULL, REFERENCES `assets(id)` | Hardware asset (if device-assigned) |
-| `allocated_at` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Allocation timestamp |
-| `notes` | TEXT | NULL | Special seat configuration or department tag |
+```sql
+CREATE TABLE IF NOT EXISTS license_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    license_id INTEGER NOT NULL,
+    employee_id INTEGER NULL,
+    asset_id INTEGER NULL,
+    allocated_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    notes TEXT NULL,
+    FOREIGN KEY (license_id) REFERENCES software_licenses(id) ON DELETE RESTRICT,
+    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE RESTRICT,
+    CHECK (employee_id IS NOT NULL OR asset_id IS NOT NULL)
+);
+```
 
 ---
 
 ### 3.7 `audit_logs`
 System-wide immutable administrative activity trail for compliance and security viva defense.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT | Event log ID |
-| `admin_id` | INTEGER | NULL, REFERENCES `administrators(id)` | Actor who triggered the event |
-| `action` | VARCHAR(50) | NOT NULL | Action type (e.g., `LOGIN_SUCCESS`, `CREATE_ASSET`, `DELETE_EMPLOYEE`) |
-| `entity_type` | VARCHAR(30) | NOT NULL | Domain entity (`AUTH`, `ASSET`, `EMPLOYEE`, `LICENSE`) |
-| `entity_id` | INTEGER | NULL | Primary key ID of the affected entity |
-| `details` | TEXT | NULL | JSON string capturing delta or contextual payload |
-| `timestamp` | DATETIME | NOT NULL DEFAULT CURRENT_TIMESTAMP | Event timestamp |
+```sql
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('AUTH', 'ASSET', 'EMPLOYEE', 'LICENSE', 'SYSTEM')),
+    entity_id INTEGER NULL,
+    details TEXT NULL,
+    timestamp TEXT NOT NULL DEFAULT (DATETIME('now')),
+    FOREIGN KEY (admin_id) REFERENCES administrators(id) ON DELETE SET NULL
+);
+```
 
 ---
 
-## 4. Key Integrity & Business Rules
+## 4. Query Optimization Indexes
 
-1. **State Machine Invariants**:
-   - An asset can only transition to `ASSIGNED` if its current status is `AVAILABLE`.
-   - If an asset is `UNDER_MAINTENANCE` or `RETIRED`, `current_employee_id` MUST be set to `NULL`.
-   - An employee with active asset assignments cannot be deleted without first returning or reassigning all held hardware.
-2. **License Over-Allocation Invariants**:
-   - `used_quantity` MUST NEVER exceed `total_quantity`.
-   - Any allocation operation must verify `(total_quantity - used_quantity) > 0` within a database transaction before incrementing.
-3. **Expiry Window Calculation**:
-   - Licenses are categorized as `EXPIRING_SOON` when `expiry_date` is non-null and `(expiry_date - CURRENT_DATE)` falls within the range `[0, 30 days]`.
-   - Licenses with `(expiry_date < CURRENT_DATE)` are categorized as `EXPIRED`.
-4. **Historical Immutability**:
-   - `asset_assignment_history` records are append-only. No `UPDATE` or `DELETE` operations are permitted on this table under normal operations.
+```sql
+CREATE INDEX IF NOT EXISTS idx_employees_code ON employees(employee_code);
+CREATE INDEX IF NOT EXISTS idx_employees_email ON employees(email);
+CREATE INDEX IF NOT EXISTS idx_assets_tag ON assets(asset_tag);
+CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
+CREATE INDEX IF NOT EXISTS idx_assets_current_emp ON assets(current_employee_id);
+CREATE INDEX IF NOT EXISTS idx_assignment_history_asset ON asset_assignment_history(asset_id);
+CREATE INDEX IF NOT EXISTS idx_assignment_history_employee ON asset_assignment_history(employee_id);
+CREATE INDEX IF NOT EXISTS idx_licenses_code ON software_licenses(license_code);
+CREATE INDEX IF NOT EXISTS idx_allocations_license ON license_allocations(license_id);
+CREATE INDEX IF NOT EXISTS idx_allocations_employee ON license_allocations(employee_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+```
+
+---
+
+## 5. Verified Data Integrity Rules
+
+1. **Assignment Integrity**:
+   - `ON DELETE RESTRICT` is enforced on foreign keys linking `assets` to `employees`. An employee holding an assigned asset cannot be deleted until the asset is returned.
+   - The multi-column constraint `CHECK ((status = 'ASSIGNED' AND current_employee_id IS NOT NULL) OR (status != 'ASSIGNED' AND current_employee_id IS NULL))` prevents unassigned assets from holding employee IDs and prevents assigned assets from lacking an employee.
+2. **License Over-Allocation Invariant**:
+   - `used_quantity` is bounded at the schema level by `CHECK (used_quantity >= 0 AND used_quantity <= total_quantity)`.
+   - `total_quantity` must be strictly positive: `CHECK (total_quantity > 0)`.
+3. **Historical Custody Immutability**:
+   - Foreign key constraint on `asset_assignment_history.asset_id` uses `ON DELETE RESTRICT`. Historical records cannot be orphaned or deleted by deleting an asset.
