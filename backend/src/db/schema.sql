@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS license_allocations (
     employee_id INTEGER NULL,
     asset_id INTEGER NULL,
     allocated_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    revoked_at TEXT NULL,
     notes TEXT NULL,
     FOREIGN KEY (license_id) REFERENCES software_licenses(id) ON DELETE RESTRICT,
     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT,

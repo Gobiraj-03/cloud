@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS software_licenses (
 
 ### 3.6 `license_allocations`
 Tracks the exact assignment of individual license seats to specific employees or hardware assets.
+Updated in Module 5 via safe forward-only migration (`ALTER TABLE license_allocations ADD COLUMN revoked_at TEXT NULL;`).
 ```sql
 CREATE TABLE IF NOT EXISTS license_allocations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,6 +194,7 @@ CREATE TABLE IF NOT EXISTS license_allocations (
     employee_id INTEGER NULL,
     asset_id INTEGER NULL,
     allocated_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    revoked_at TEXT NULL,
     notes TEXT NULL,
     FOREIGN KEY (license_id) REFERENCES software_licenses(id) ON DELETE RESTRICT,
     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
@@ -305,4 +307,49 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
    - Inserts audit record into `asset_assignment_history` with `action = 'RETURNED'`.
    - Appends audit event into `audit_logs`.
    - Historical records are preserved; the asset is immediately eligible for re-assignment.
+
+---
+
+## 7. Module 5 Software License Allocation Lifecycle & Invariant Mechanics
+
+```
+   +-------------------------------------------------------------+
+   | software_licenses                                           |
+   | total_quantity = N, used_quantity = U, available = N - U    |
+   +-----------------------------+-------------------------------+
+                                 |
+        /allocations             | (ACID Transaction:
+        Endpoint                 |  Verify employee active
+                                 |  Verify U < N
+                                 |  Insert allocation (revoked_at = NULL)
+                                 |  used_quantity = U + 1
+                                 |  Insert audit log)
+                                 v
+                     +-----------------------+
+                     | Active Allocation     |
+                     | (revoked_at IS NULL)  |
+                     +-----------+-----------+
+                                 |
+        /revoke                  | (ACID Transaction:
+        Endpoint                 |  Verify revoked_at IS NULL
+                                 |  Update revoked_at = DATETIME('now')
+                                 |  used_quantity = U - 1
+                                 |  Insert audit log)
+                                 v
+                     +-----------------------+
+                     | Revoked Record        |
+                     | (revoked_at NOT NULL) | (Preserved for compliance audit trail)
+                     +-----------------------+
+```
+
+### 7.1 Seat Capacity Invariant
+The database maintains the inviolable relationship:
+`0 <= used_quantity <= total_quantity`
+- `available_quantity` is derived deterministically: `total_quantity - used_quantity`.
+- Any attempt to update `total_quantity` below current active allocations (`used_quantity`) is rejected with `HTTP 409 Conflict`.
+
+### 7.2 Safe Deletion vs Archival
+- Physical deletion of a license is strictly prohibited if historical or active allocations exist (`409 Conflict`).
+- To preserve compliance audit history, the administrator updates `renewal_status` to `CANCELLED` or `EXPIRED`.
+
 

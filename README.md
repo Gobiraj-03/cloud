@@ -4,9 +4,9 @@
 [![Budget Constraint](https://img.shields.io/badge/Budget-₹0_Strict-green.svg)](#)
 [![Academic Project](https://img.shields.io/badge/Course-Cloud_Computing_Capstone-orange.svg)](#)
 [![Node Version](https://img.shields.io/badge/Node.js-v22.15.1-brightgreen.svg)](#)
-[![Total Tests](https://img.shields.io/badge/Total_Tests-75%20Passed-brightgreen.svg)](#)
-[![Backend Tests](https://img.shields.io/badge/Backend_Tests-55%20Passed-brightgreen.svg)](#)
-[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-20%20Passed-brightgreen.svg)](#)
+[![Total Tests](https://img.shields.io/badge/Total_Tests-117%20Passed-brightgreen.svg)](#)
+[![Backend Tests](https://img.shields.io/badge/Backend_Tests-85%20Passed-brightgreen.svg)](#)
+[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-32%20Passed-brightgreen.svg)](#)
 
 A secure, full-stack enterprise web application designed for small-to-medium organizations and IT administrators to manage the complete lifecycle of physical IT hardware assets and track software license seat allocations, compliance, and upcoming renewal expirations.
 
@@ -188,7 +188,8 @@ Detailed architectural and engineering documentation is maintained in the `docs/
 | **Module 2.1** | **COMPLETED** | Authentication security hardening: Cookie-only token isolation, zero JSON token leakage, strict CSRF/CORS origin defense, standardized `ADMIN_PASSWORD` provisioning, Secure cookie verification (25 tests passed). |
 | **Module 3** | **COMPLETED** | React SPA frontend foundation (Vite), enterprise design system, cookie authentication integration, protected routes, responsive navigation, honest dashboard metrics, and placeholders (10 tests passed; 35 total tests). |
 | **Module 4** | **COMPLETED** | Hardware asset inventory CRUD, category/status filters, employee directory CRUD, atomic transaction assignment and return lifecycle, custody history timeline, live dashboard integration (55 backend + 20 frontend = 75 total tests passed). |
-| **Module 5** | *Awaiting Authorization* | Enterprise software license tracking, utilized vs total seat calculation, employee seat allocations. |
+| **Module 5** | **COMPLETED** | Software license portfolio CRUD, capacity invariant enforcement (`0 <= used_quantity <= total_quantity`), atomic seat allocation & non-destructive revocation lifecycle, employee allocation modal, seat utilization progress bars, live dashboard metrics (85 backend + 32 frontend = 117 total tests passed). |
+| **Module 6** | *Awaiting Authorization* | Automated expiry notification engine (30/60/90 days), compliance audit reporting, CSV exports. |
 
 ---
 
@@ -214,20 +215,54 @@ All endpoints are authenticated using server-side cookie sessions (`HttpOnly` se
 | `POST` | `/api/assets/:id/assign` | Atomic transaction: Assign available asset to active employee, update status to `ASSIGNED`, record history. |
 | `POST` | `/api/assets/:id/return` | Atomic transaction: Return assigned asset, update status to `AVAILABLE`, record return history. |
 
-### 7.2 Running and Testing Module 4
+### 7.2 Running and Testing Module 4 & 5
 
 ```powershell
-# Run the complete test suite (75 passing tests across backend & frontend)
+# Run the complete test suite (117 passing tests across backend & frontend)
 npm test
 
-# Run backend test suite only (55 passing tests)
+# Run backend test suite only (85 passing tests)
 npm run backend:test
 
-# Run frontend test suite only (20 passing tests)
+# Run frontend test suite only (32 passing tests)
 npm run frontend:test
 
 # Build production bundle
 npm run frontend:build
 ```
+
+---
+
+## 8. Module 5: Software License Management & Employee Seat Allocations
+
+### 8.1 Implemented API Endpoints
+
+All endpoints require administrator cookie-session authentication (`authenticate` middleware):
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/licenses` | List software licenses with search (`search`), type (`type`), renewal status (`status`), and pagination (`page`, `limit`). Automatically derives `available_quantity = total_quantity - used_quantity`. |
+| `GET` | `/api/licenses/:id` | Retrieve single software license with current capacity and utilization metrics. |
+| `POST` | `/api/licenses` | Register new license agreement (validates unique `license_code`, positive `total_quantity`, non-negative cost). |
+| `PUT` | `/api/licenses/:id` | Update license metadata. Validates capacity invariant: rejects reducing `total_quantity` below active allocations (`used_quantity`) with `409 Conflict`. |
+| `DELETE` | `/api/licenses/:id` | Safely delete license with 0 historical allocations. Rejects deletion with `409 Conflict` if allocation history exists to preserve compliance trails. |
+| `GET` | `/api/licenses/:id/allocations` | List all allocations for a license with employee metadata and status (active vs revoked). |
+| `POST` | `/api/licenses/:id/allocations` | Atomic ACID transaction: verifies employee exists and is `ACTIVE`, checks remaining seat capacity, inserts allocation record, increments `used_quantity`, and logs audit trail. Rejects over-capacity with `409 Conflict`. |
+| `POST` | `/api/licenses/:id/allocations/:allocationId/revoke` | Atomic ACID transaction: marks allocation revoked (`revoked_at`), decrements `used_quantity`, prevents double-revocation, preserves historical record, and logs audit trail. |
+
+### 8.2 Invariant Integrity & Concurrency Guarantees
+
+1. **Seat Capacity Invariant**:
+   `0 <= used_quantity <= total_quantity`
+   - `available_quantity` is always empirically derived on the server (`total_quantity - used_quantity`).
+   - Client-supplied available seat counts are never trusted.
+2. **Atomic Concurrency Protection**:
+   - `allocateSeat` executes conditional update `UPDATE software_licenses SET used_quantity = used_quantity + 1 WHERE id = ? AND used_quantity < total_quantity` inside `db.transaction`.
+   - If capacity is exhausted concurrently, the transaction rolls back and returns `409 Conflict`.
+3. **Non-Destructive Allocation History**:
+   - Forward-only migration added `revoked_at TEXT NULL` to `license_allocations`.
+   - Active allocations: `revoked_at IS NULL`.
+   - Revoking an allocation stamps `revoked_at` without deleting the row, preserving enterprise compliance audit trails.
+
 
 

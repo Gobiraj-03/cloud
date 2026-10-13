@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { healthApi } from '../api/healthApi';
 import { assetApi } from '../api/assetApi';
 import { employeeApi } from '../api/employeeApi';
+import { licenseApi } from '../api/licenseApi';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -23,12 +24,15 @@ export function DashboardPage() {
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(true);
 
-  // Asset & Employee metrics state
+  // Asset, Employee & License metrics state
   const [metrics, setMetrics] = useState({
     totalAssets: null,
     assignedAssets: null,
     availableAssets: null,
-    totalEmployees: null
+    totalEmployees: null,
+    totalLicenses: null,
+    totalPurchasedSeats: null,
+    totalAllocatedSeats: null
   });
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [metricsError, setMetricsError] = useState(null);
@@ -60,15 +64,16 @@ export function DashboardPage() {
     };
   }, []);
 
-  // Fetch real inventory and employee metrics
+  // Fetch real inventory, employee, and license metrics
   const fetchMetrics = useCallback(async () => {
     try {
       setMetricsLoading(true);
       setMetricsError(null);
 
-      const [assetRes, empRes] = await Promise.all([
+      const [assetRes, empRes, licRes] = await Promise.all([
         assetApi.list({ limit: 1000 }),
-        employeeApi.list({ limit: 1 })
+        employeeApi.list({ limit: 1 }),
+        licenseApi.list({ limit: 1000 })
       ]);
 
       const allAssets = assetRes.assets || [];
@@ -77,11 +82,19 @@ export function DashboardPage() {
       const availableAssets = allAssets.filter(a => a.status === 'AVAILABLE').length;
       const totalEmployees = empRes.pagination?.total ?? (empRes.employees ? empRes.employees.length : 0);
 
+      const allLicenses = licRes.licenses || [];
+      const totalLicenses = licRes.pagination?.total ?? allLicenses.length;
+      const totalPurchasedSeats = allLicenses.reduce((sum, l) => sum + (l.total_quantity || 0), 0);
+      const totalAllocatedSeats = allLicenses.reduce((sum, l) => sum + (l.used_quantity || 0), 0);
+
       setMetrics({
         totalAssets,
         assignedAssets,
         availableAssets,
-        totalEmployees
+        totalEmployees,
+        totalLicenses,
+        totalPurchasedSeats,
+        totalAllocatedSeats
       });
     } catch (err) {
       setMetricsError(err.message || 'Unable to retrieve inventory metrics from backend.');
@@ -302,7 +315,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Software Licenses - Staged Pending Module 5 */}
+        {/* Software Licenses - Live Module 5 */}
         <div className="metric-card">
           <div className="metric-card-top">
             <span className="metric-label">Software Licenses</span>
@@ -311,12 +324,24 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="metric-value-box">
-            <span className="metric-value-placeholder">--</span>
+            {metricsLoading ? (
+              <span className="metric-value-placeholder">...</span>
+            ) : metricsError ? (
+              <span className="metric-value-placeholder" style={{ color: 'var(--color-danger-text)' }}>Unavailable</span>
+            ) : (
+              <span style={{ fontSize: '1.85rem', fontWeight: 700, color: 'var(--color-slate-900)' }}>
+                {metrics.totalLicenses}
+              </span>
+            )}
           </div>
           <div>
-            <span className="metric-badge badge-pending">Pending Module 5 API</span>
+            <span className="metric-badge badge-success">Live Module 5 API</span>
             <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
-              Total seat capacity & allocations
+              {metricsLoading || metricsError ? (
+                'Total seat capacity & allocations'
+              ) : (
+                `${metrics.totalAllocatedSeats} of ${metrics.totalPurchasedSeats} seats allocated`
+              )}
             </p>
           </div>
         </div>

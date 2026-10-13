@@ -39,6 +39,12 @@ async function migrate(customDbPath = null) {
   );
   const tableNames = existingTables.map((t) => t.name);
 
+  // Forward-only migration check: ensure revoked_at exists on license_allocations
+  const allocCols = await db.query("PRAGMA table_info(license_allocations);");
+  if (allocCols && allocCols.length > 0 && !allocCols.some((c) => c.name === 'revoked_at')) {
+    await db.run('ALTER TABLE license_allocations ADD COLUMN revoked_at TEXT NULL;');
+  }
+
   const missingTables = REQUIRED_TABLES.filter((t) => !tableNames.includes(t));
   if (missingTables.length > 0) {
     throw new Error(`Migration verification failed. Missing tables: ${missingTables.join(', ')}`);

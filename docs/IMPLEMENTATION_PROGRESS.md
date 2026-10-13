@@ -10,7 +10,7 @@
 | **2.1** | **Authentication Security Hardening** | Cookie-only session isolation (zero token in JSON), strict CSRF & CORS defense, standardized ADMIN_PASSWORD provisioning, Secure cookie flag | **COMPLETED (25/25 Tests Passed)** | **Authorized** |
 | **3** | **React Frontend Foundation & Dashboard** | Vite setup, enterprise layout, cookie auth client, route guards, honest KPI dashboard, placeholder views | **COMPLETED (10/10 Tests Passed)** | **Authorized** |
 | **4** | **IT Asset Management & Employee Assignment** | Asset CRUD, category filters, assignment workflow, return/reassign, history preservation | **COMPLETED (55/55 Backend, 20/20 Frontend Tests Passed)** | **Authorized** |
-| **5** | **Software License Management** | License CRUD, seat allocation, utilized vs total calculation, expiry classification | Not Started | Blocked |
+| **5** | **Software License Management** | License CRUD, seat allocation, utilized vs total calculation, expiry classification | **COMPLETED (85/85 Backend, 32/32 Frontend Tests Passed)** | **Authorized** |
 | **6** | **Expiry Alerts, Reporting & CSV Export** | 30-day expiry engine, warranty warnings, filtered reporting tables, CSV download, tests | Not Started | Blocked |
 | **7** | **AWS Cost Verification & Deployment Preparation** | Account eligibility audit, cost verification, build packaging, deployment only on approval | Not Started | **STRICTLY BLOCKED** |
 | **8** | **End-to-End Testing & Viva Presentation** | E2E test suite, architecture diagrams, viva demo script, documentation polish | Not Started | Blocked |
@@ -106,14 +106,32 @@
 
 ---
 
-### Modules 5 through 8
+### Module 5: Software License Management & Employee Allocations (Completed)
+- [x] Forward-only safe migration adding `revoked_at TEXT NULL` to `license_allocations`.
+- [x] License inventory CRUD endpoints (`GET /api/licenses`, `GET /api/licenses/:id`, `POST /api/licenses`, `PUT /api/licenses/:id`, `DELETE /api/licenses/:id`).
+- [x] Allocation lifecycle endpoints (`GET /api/licenses/:id/allocations`, `POST /api/licenses/:id/allocations`, `POST /api/licenses/:id/allocations/:allocationId/revoke`).
+- [x] Seat capacity invariant enforcement: `0 <= used_quantity <= total_quantity`.
+- [x] Derivation of `available_quantity` on server (`total_quantity - used_quantity`).
+- [x] Atomic ACID transactions using conditional SQL updates for race condition protection.
+- [x] Active employee eligibility check before allocation.
+- [x] Duplicate active allocation check per employee-license pair.
+- [x] Non-destructive revocation with `revoked_at` timestamping and seat recycling.
+- [x] Safe deletion check: rejection with HTTP 409 if any allocations exist.
+- [x] Audit logging for license creation, update, allocation, and revocation without secrets.
+- [x] Full React license management page at `/licenses` with seat utilization progress bars.
+- [x] Live dashboard integration replacing placeholder with real empirical license counts.
+- [x] Automated test suites: 30 new backend tests (85/85 passing total) + 12 new frontend tests (32/32 passing total), totaling 117 automated tests passing with zero failures.
+
+---
+
+### Modules 6 through 8
 *(Full criteria detailed in Module 0 baseline — awaiting progressive authorization)*
 
 ---
 
-## 3. Automated Test Execution Log (All 75 Tests Passing)
+## 3. Automated Test Execution Log (All 117 Tests Passing)
 
-### 3.1 Backend Test Suite (55/55 Passed)
+### 3.1 Backend Test Suite (85/85 Passed)
 Executed using Node.js built-in test runner (`node --test tests/**/*.test.js`) in `backend/`:
 
 ```

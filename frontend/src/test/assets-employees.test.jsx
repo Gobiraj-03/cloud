@@ -9,6 +9,7 @@ import { AuthContext } from '../context/AuthContext';
 import { assetApi } from '../api/assetApi';
 import { employeeApi } from '../api/employeeApi';
 import { healthApi } from '../api/healthApi';
+import { licenseApi } from '../api/licenseApi';
 
 const MOCK_ADMIN_USER = {
   id: 1,
@@ -453,6 +454,12 @@ describe('Module 4 — Assets, Employees, Lifecycle & Dashboard Tests', () => {
       employees: [],
       pagination: { total: 5, page: 1, limit: 1 }
     });
+    vi.spyOn(licenseApi, 'list').mockResolvedValue({
+      licenses: [
+        { id: 1, software_name: 'Microsoft 365', total_quantity: 25, used_quantity: 8 }
+      ],
+      pagination: { total: 4, page: 1, limit: 1000 }
+    });
 
     renderWithAuth(<DashboardPage />);
 
@@ -467,8 +474,8 @@ describe('Module 4 — Assets, Employees, Lifecycle & Dashboard Tests', () => {
       expect(screen.getByText('5')).toBeInTheDocument();
     });
 
-    // Check that Software Licenses is still honest and pending Module 5
-    expect(screen.getByText('Pending Module 5 API')).toBeInTheDocument();
+    // Check that Software Licenses reflects Live Module 5 and Licenses Near Expiry is pending Module 6
+    expect(screen.getByText('Live Module 5 API')).toBeInTheDocument();
     expect(screen.getByText('Pending Module 6 API')).toBeInTheDocument();
   });
 });

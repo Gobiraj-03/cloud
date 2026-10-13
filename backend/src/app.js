@@ -5,6 +5,7 @@ const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
 const employeeRoutes = require('./routes/employee.routes');
 const assetRoutes = require('./routes/asset.routes');
+const licenseRoutes = require('./routes/license.routes');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/assets', assetRoutes);
+app.use('/api/licenses', licenseRoutes);
 
 // Catch-all 404 & Centralized Error Handlers
 app.use(notFoundHandler);

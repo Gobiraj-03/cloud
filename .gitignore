@@ -17,9 +17,8 @@ node_modules/
 *.db-journal
 *.db-wal
 *.db-shm
-data/*.sqlite
-data/*.sqlite3
-data/*.db
+*.bak
+data/
 
 # Build outputs
 dist/

@@ -371,6 +371,20 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
           json: async () => MOCK_HEALTH
         };
       }
+      if (url.includes('/api/licenses') || url.includes('/api/assets') || url.includes('/api/employees')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({
+            success: true,
+            licenses: [],
+            assets: [],
+            employees: [],
+            pagination: { total: 0 }
+          })
+        };
+      }
       return { ok: false, status: 404, headers: new Headers() };
     });
 
@@ -387,9 +401,9 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
     expect(screen.getAllByText(/Software Licenses/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Licenses Near Expiry/i)).toBeInTheDocument();
 
-    // Verify pending module badges for unreleased modules (Module 5 & Module 6)
-    const pendingBadges = screen.getAllByText(/Pending Module/i);
-    expect(pendingBadges.length).toBeGreaterThanOrEqual(2);
+    // Verify pending module badge for Module 6 and live badge for Module 5
+    expect(screen.getByText(/Live Module 5 API/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pending Module 6 API/i)).toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------
@@ -416,14 +430,17 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
           json: async () => MOCK_HEALTH
         };
       }
-      if (url.includes('/api/assets')) {
+      if (url.includes('/api/assets') || url.includes('/api/licenses') || url.includes('/api/employees')) {
         return {
           ok: true,
           status: 200,
           headers: new Headers({ 'content-type': 'application/json' }),
           json: async () => ({
             success: true,
-            data: { assets: [], pagination: { total: 0 } }
+            assets: [],
+            licenses: [],
+            employees: [],
+            pagination: { total: 0 }
           })
         };
       }
@@ -448,7 +465,7 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
     const licensesLink = screen.getByRole('link', { name: /Software Licenses/i });
     fireEvent.click(licensesLink);
     expect(await screen.findByRole('heading', { name: /Software License Management/i })).toBeInTheDocument();
-    expect(screen.getByText(/Coming in Module 5/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add License/i })).toBeInTheDocument();
 
     // Click Settings navigation
     const settingsLink = screen.getByRole('link', { name: /Settings/i });
