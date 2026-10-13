@@ -9,7 +9,7 @@
 | **2** | **Administrator Authentication & Security** | Server-managed sessions, bcrypt hashing, login/logout/me APIs, route guards, audit logging, rate limiting | **COMPLETED** | **Authorized** |
 | **2.1** | **Authentication Security Hardening** | Cookie-only session isolation (zero token in JSON), strict CSRF & CORS defense, standardized ADMIN_PASSWORD provisioning, Secure cookie flag | **COMPLETED (25/25 Tests Passed)** | **Authorized** |
 | **3** | **React Frontend Foundation & Dashboard** | Vite setup, enterprise layout, cookie auth client, route guards, honest KPI dashboard, placeholder views | **COMPLETED (10/10 Tests Passed)** | **Authorized** |
-| **4** | **IT Asset Management & Employee Assignment** | Asset CRUD, category filters, assignment workflow, return/reassign, history preservation | Not Started | Blocked |
+| **4** | **IT Asset Management & Employee Assignment** | Asset CRUD, category filters, assignment workflow, return/reassign, history preservation | **COMPLETED (55/55 Backend, 20/20 Frontend Tests Passed)** | **Authorized** |
 | **5** | **Software License Management** | License CRUD, seat allocation, utilized vs total calculation, expiry classification | Not Started | Blocked |
 | **6** | **Expiry Alerts, Reporting & CSV Export** | 30-day expiry engine, warranty warnings, filtered reporting tables, CSV download, tests | Not Started | Blocked |
 | **7** | **AWS Cost Verification & Deployment Preparation** | Account eligibility audit, cost verification, build packaging, deployment only on approval | Not Started | **STRICTLY BLOCKED** |
@@ -90,13 +90,19 @@
 
 ---
 
-### Module 4: IT Asset Management & Employee Assignment (Next)
-- [ ] Hardware asset inventory CRUD endpoints and parameterized queries.
-- [ ] Unique asset tag validation and serial number tracking.
-- [ ] Category filtering (Laptops, Desktops, Monitors, Servers, Accessories).
-- [ ] Employee assignment state machine (Available -> Assigned -> Under Maintenance -> Retired).
-- [ ] Immutable custody preservation in `asset_assignment_history`.
-- [ ] Unit and integration regression tests.
+### Module 4: IT Asset Management & Employee Assignment (Completed)
+- [x] Hardware asset inventory CRUD endpoints (`GET /api/assets`, `GET /api/assets/:id`, `POST /api/assets`, `PUT /api/assets/:id`, `DELETE /api/assets/:id`).
+- [x] Employee management CRUD endpoints (`GET /api/employees`, `GET /api/employees/:id`, `POST /api/employees`, `PUT /api/employees/:id`, `DELETE /api/employees/:id`).
+- [x] Unique asset tag and unique employee code/email validation with HTTP 409 Conflict handling.
+- [x] Search by multiple fields and filtering by category, status, department, and assignment state.
+- [x] Dedicated atomic assignment lifecycle endpoint (`POST /api/assets/:id/assign`) verifying employee active eligibility and asset availability within an ACID database transaction.
+- [x] Dedicated atomic return lifecycle endpoint (`POST /api/assets/:id/return`) closing historical custody and releasing asset to available pool.
+- [x] Chronological custody assignment history view endpoint (`GET /api/assets/:id/history`).
+- [x] Safe deletion guards preventing physical deletion of assets or employees with historical assignment records (preserving historical audit trails).
+- [x] Audit log integration recording all asset creation, update, assign, return, and employee lifecycle events with authenticated admin ID.
+- [x] Replaced frontend placeholders with full enterprise management screens for Assets (`AssetsPage.jsx`) and Employees (`EmployeesPage.jsx`).
+- [x] Live Dashboard metric integration displaying empirical asset and employee counts while keeping unbuilt license metrics honest.
+- [x] Automated test suites: 30 new backend tests (55/55 passing total) + 10 new frontend tests (20/20 passing total), totaling 75 automated tests passing with zero failures.
 
 ---
 
@@ -105,47 +111,96 @@
 
 ---
 
-## 3. Automated Test Execution Log (All 35 Tests Passing)
+## 3. Automated Test Execution Log (All 75 Tests Passing)
 
-### 3.1 Backend Test Suite (25/25 Passed)
+### 3.1 Backend Test Suite (55/55 Passed)
 Executed using Node.js built-in test runner (`node --test tests/**/*.test.js`) in `backend/`:
 
 ```
 TAP version 13
-ok 1 - 1. Password policy enforces minimum length and complexity
-ok 2 - 2. Successful login sets HttpOnly cookie and does NOT return session token in JSON
-ok 3 - 3. POST /api/auth/login succeeds with email identifier (case-insensitive)
-ok 4 - 4. POST /api/auth/login rejects invalid password with generic 401 error
-ok 5 - 5. POST /api/auth/login rejects nonexistent user with identical generic 401 error
-ok 6 - 6. POST /api/auth/login returns 400 Bad Request on missing fields
-ok 7 - 7. GET /api/auth/me returns profile using cookie session
-ok 8 - 8. GET /api/auth/me returns 401 Unauthorized when unauthenticated
-ok 9 - 9. GET /api/auth/verify protects arbitrary routes from unauthenticated access
-ok 10 - 10. Protected routes reject expired sessions
-ok 11 - 11. Cookie-based state-changing requests block cross-site CSRF origins
-ok 12 - 12. Production cookies include the Secure attribute
-ok 13 - 13. POST /api/auth/logout revokes session in SQLite and clears cookie
-ok 14 - 14. Administrator provisioning uses documented ADMIN_PASSWORD environment variable
-ok 15 - 1. Database initialization succeeds
-ok 16 - 2. All required tables exist in database (7 domain tables + sessions table)
-ok 17 - 3. Foreign key enforcement is enabled on connection
-ok 18 - 4. Seed data inserts successfully and satisfies constraints
-ok 19 - 5. Repeated execution of seed script is idempotent (does not duplicate records)
-ok 20 - 6. Duplicate asset tag is rejected by UNIQUE constraint
-ok 21 - 7. Invalid foreign-key reference is rejected
-ok 22 - 8. License quantity constraints are strictly enforced
-ok 23 - 9. GET /api/health returns 200 OK and expected JSON when healthy
-ok 24 - 10. GET /api/health returns 503 Service Unavailable when database fails
-ok 25 - 404 Handler returns standardized JSON for nonexistent routes
-1..25
-# pass 25 | fail 0 | cancelled 0
+# Domain & Lifecycle Suite: tests/assets-employees.test.js
+ok 1 - 1. GET /api/employees rejects unauthenticated request with 401
+ok 2 - 2. GET /api/employees succeeds when authenticated and returns paginated list
+ok 3 - 3. POST /api/employees creates employee with valid data
+ok 4 - 4. POST /api/employees rejects missing required fields with 400
+ok 5 - 5. POST /api/employees rejects invalid email syntax with 400
+ok 6 - 6. POST /api/employees rejects duplicate email with 409
+ok 7 - 7. POST /api/employees rejects duplicate employee_code with 409
+ok 8 - 8. GET /api/employees/:id returns single employee profile
+ok 9 - 9. GET /api/employees/:id returns 404 for nonexistent employee
+ok 10 - 10. PUT /api/employees/:id updates existing employee profile
+ok 11 - 11. PUT /api/employees/:id rejects conflicting email with 409
+ok 12 - 12. DELETE /api/employees/:id rejects deletion of employee with assignment history (409 Conflict)
+ok 13 - 13. DELETE /api/employees/:id safely deletes employee with no history
+ok 14 - 14. GET /api/employees supports department and status filters
+ok 15 - 15. GET /api/assets rejects unauthenticated request with 401
+ok 16 - 16. GET /api/assets succeeds when authenticated and returns paginated list with joined employee details
+ok 17 - 17. POST /api/assets creates new hardware asset with valid data
+ok 18 - 18. POST /api/assets rejects duplicate asset_tag with 409
+ok 19 - 19. POST /api/assets rejects invalid category with 400
+ok 20 - 20. POST /api/assets rejects invalid initial status with 400
+ok 21 - 21. GET /api/assets/:id returns single asset with joined employee data
+ok 22 - 22. PUT /api/assets/:id updates asset attributes
+ok 23 - 23. PUT /api/assets/:id prevents silent removal of employee assignment from assigned asset
+ok 24 - 24. POST /api/assets/:id/assign successfully assigns available asset to active employee
+ok 25 - 25. POST /api/assets/:id/assign rejects nonexistent employee with 404
+ok 26 - 26. POST /api/assets/:id/assign rejects assigning to inactive (TERMINATED/ON_LEAVE) employee with 409
+ok 27 - 27. POST /api/assets/:id/assign rejects assets in UNDER_MAINTENANCE or RETIRED status with 409
+ok 28 - 28. POST /api/assets/:id/return succeeds and returns asset to AVAILABLE status
+ok 29 - 29. POST /api/assets/:id/return rejects returning an unassigned asset with 409
+ok 30 - 30. A returned asset can be assigned again, preserving historical custody records
+
+# Security Hardening & Session Suite: tests/auth-hardening.test.js (14 tests)
+ok 31 - 1. Password policy enforces minimum length and complexity
+ok 32 - 2. Successful login sets HttpOnly cookie and does NOT return session token in JSON
+ok 33 - 3. POST /api/auth/login succeeds with email identifier (case-insensitive)
+ok 34 - 4. POST /api/auth/login rejects invalid password with generic 401 error
+ok 35 - 5. POST /api/auth/login rejects nonexistent user with identical generic 401 error
+ok 36 - 6. POST /api/auth/login returns 400 Bad Request on missing fields
+ok 37 - 7. GET /api/auth/me returns profile using cookie session
+ok 38 - 8. GET /api/auth/me returns 401 Unauthorized when unauthenticated
+ok 39 - 9. GET /api/auth/verify protects arbitrary routes from unauthenticated access
+ok 40 - 10. Protected routes reject expired sessions
+ok 41 - 11. Cookie-based state-changing requests block cross-site CSRF origins
+ok 42 - 12. Production cookies include the Secure attribute
+ok 43 - 13. POST /api/auth/logout revokes session in SQLite and clears cookie
+ok 44 - 14. Administrator provisioning uses documented ADMIN_PASSWORD environment variable
+
+# Database Foundation & Health Suite: tests/health.test.js (11 tests)
+ok 45 - 1. Database initialization succeeds
+ok 46 - 2. All required tables exist in database (7 domain tables + sessions table)
+ok 47 - 3. Foreign key enforcement is enabled on connection
+ok 48 - 4. Seed data inserts successfully and satisfies constraints
+ok 49 - 5. Repeated execution of seed script is idempotent (does not duplicate records)
+ok 50 - 6. Duplicate asset tag is rejected by UNIQUE constraint
+ok 51 - 7. Invalid foreign-key reference is rejected
+ok 52 - 8. License quantity constraints are strictly enforced
+ok 53 - 9. GET /api/health returns 200 OK and expected JSON when healthy
+ok 54 - 10. GET /api/health returns 503 Service Unavailable when database fails
+ok 55 - 404 Handler returns standardized JSON for nonexistent routes
+
+1..55
+# tests 55 | pass 55 | fail 0 | cancelled 0
 ```
 
-### 3.2 Frontend Test Suite (10/10 Passed)
+### 3.2 Frontend Test Suite (20/20 Passed)
 Executed using Vitest and React Testing Library (`vitest run`) in `frontend/`:
 
 ```
  RUN  v5.0.4 D:/cloud/frontend
+
+ ✓ src/test/assets-employees.test.jsx (10 tests)
+   ✓ Module 4 — Assets, Employees, Lifecycle & Dashboard Tests (10)
+     ✓ 1. Asset list loads and renders records in the table
+     ✓ 2. Asset creation modal validates input and submits new asset
+     ✓ 3. Asset edit modal opens with prefilled data and submits updates
+     ✓ 4. Search input and category filter trigger list queries with updated params
+     ✓ 5. Assignment modal renders employee options and submits assignment
+     ✓ 6. Return modal triggers return lifecycle workflow
+     ✓ 7. Assignment history modal displays chronological custody records
+     ✓ 8. Employee directory renders personnel and creates new employee
+     ✓ 9. Error banner renders when API call fails and provides retry button
+     ✓ 10. Dashboard displays live asset & employee counts and preserves pending badges
 
  ✓ src/test/auth-flow.test.jsx (10 tests)
    ✓ Frontend Authentication, Navigation & Dashboard Tests (10)
@@ -158,11 +213,12 @@ Executed using Vitest and React Testing Library (`vitest run`) in `frontend/`:
      ✓ 7. Logout invokes /api/auth/logout and navigates back to /login
      ✓ 8. API client sends credentials: "include" for secure HttpOnly cookie transfer
      ✓ 9. Dashboard displays honest pending states instead of fabricated metrics
-     ✓ 10. Navigation links resolve to intended placeholder pages
+     ✓ 10. Navigation links resolve to intended pages
 
- Test Files  1 passed (1)
-      Tests  10 passed (10)
+ Test Files  2 passed (2)
+      Tests  20 passed (20)
 ```
+
 
 ---
 

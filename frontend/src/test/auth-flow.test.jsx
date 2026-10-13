@@ -387,15 +387,15 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
     expect(screen.getAllByText(/Software Licenses/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Licenses Near Expiry/i)).toBeInTheDocument();
 
-    // Verify pending module badges
+    // Verify pending module badges for unreleased modules (Module 5 & Module 6)
     const pendingBadges = screen.getAllByText(/Pending Module/i);
-    expect(pendingBadges.length).toBeGreaterThanOrEqual(5);
+    expect(pendingBadges.length).toBeGreaterThanOrEqual(2);
   });
 
   // -------------------------------------------------------------------------
   // Test 10: Navigation links resolve to intended pages
   // -------------------------------------------------------------------------
-  it('10. Navigation links resolve to intended placeholder pages', async () => {
+  it('10. Navigation links resolve to intended pages', async () => {
     vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
       if (url.includes('/api/auth/me')) {
         return {
@@ -416,6 +416,17 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
           json: async () => MOCK_HEALTH
         };
       }
+      if (url.includes('/api/assets')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({
+            success: true,
+            data: { assets: [], pagination: { total: 0 } }
+          })
+        };
+      }
       return { ok: false, status: 404, headers: new Headers() };
     });
 
@@ -430,8 +441,8 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
     // Click Hardware Assets navigation
     const assetsLink = await screen.findByRole('link', { name: /Hardware Assets/i });
     fireEvent.click(assetsLink);
-    expect(await screen.findByRole('heading', { name: /Hardware Asset Management/i })).toBeInTheDocument();
-    expect(screen.getByText(/Coming in Module 4/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Hardware Asset Inventory/i })).toBeInTheDocument();
+    expect(screen.getByText(/Add Asset/i)).toBeInTheDocument();
 
     // Click Software Licenses navigation
     const licensesLink = screen.getByRole('link', { name: /Software Licenses/i });

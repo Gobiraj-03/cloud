@@ -3,6 +3,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const healthRoutes = require('./routes/health.routes');
 const authRoutes = require('./routes/auth.routes');
+const employeeRoutes = require('./routes/employee.routes');
+const assetRoutes = require('./routes/asset.routes');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -50,6 +52,8 @@ if (process.env.NODE_ENV !== 'test') {
 // API Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/assets', assetRoutes);
 
 // Catch-all 404 & Centralized Error Handlers
 app.use(notFoundHandler);

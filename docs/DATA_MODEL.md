@@ -266,3 +266,43 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
    - `total_quantity` must be strictly positive: `CHECK (total_quantity > 0)`.
 3. **Historical Custody Immutability**:
    - Foreign key constraint on `asset_assignment_history.asset_id` uses `ON DELETE RESTRICT`. Historical records cannot be orphaned or deleted by deleting an asset.
+   - Deleting an employee who has prior or active assignment history is rejected with HTTP 409 Conflict; the system recommends changing status to `TERMINATED` (deactivation) instead to preserve audit trails.
+
+---
+
+## 6. Module 4 Lifecycle State Transitions & Transaction Mechanics
+
+```
+               +-------------+
+               |  AVAILABLE  | <---------------------------+
+               +------+------+                             |
+                      |                                    |
+          /assign     | (Transaction:                      | /return
+          Endpoint    |  Asset -> ASSIGNED                 | Endpoint
+                      |  current_employee_id = emp.id      | (Transaction:
+                      |  Insert History: 'ASSIGNED'        |  Asset -> AVAILABLE
+                      |  Insert Audit Log)                 |  current_employee_id = NULL
+                      v                                    |  Insert History: 'RETURNED'
+               +-------------+                             |  Insert Audit Log)
+               |  ASSIGNED   | ----------------------------+
+               +-------------+
+```
+
+### 6.1 Atomic Assignment Operation (`POST /api/assets/:id/assign`)
+1. Validates that `asset_id` and `employee_id` exist.
+2. Asserts asset status is `AVAILABLE` and `current_employee_id IS NULL`. Rejects `UNDER_MAINTENANCE` or `RETIRED` assets with 409 Conflict.
+3. Asserts target employee has `status = 'ACTIVE'`. Rejects `TERMINATED` or `ON_LEAVE` employees with 409 Conflict.
+4. Executes within `db.transaction(...)`:
+   - Conditional update: `UPDATE assets SET status = 'ASSIGNED', current_employee_id = ? WHERE id = ? AND status = 'AVAILABLE' AND current_employee_id IS NULL`.
+   - Inserts audit record into `asset_assignment_history` with `action = 'ASSIGNED'`.
+   - Appends audit event into `audit_logs`.
+   - Automatically rolls back on any write failure.
+
+### 6.2 Atomic Return Operation (`POST /api/assets/:id/return`)
+1. Validates that asset exists, status is `ASSIGNED`, and `current_employee_id IS NOT NULL`.
+2. Executes within `db.transaction(...)`:
+   - Conditional update: `UPDATE assets SET status = 'AVAILABLE', current_employee_id = NULL WHERE id = ? AND status = 'ASSIGNED'`.
+   - Inserts audit record into `asset_assignment_history` with `action = 'RETURNED'`.
+   - Appends audit event into `audit_logs`.
+   - Historical records are preserved; the asset is immediately eligible for re-assignment.
+

@@ -4,9 +4,9 @@
 [![Budget Constraint](https://img.shields.io/badge/Budget-₹0_Strict-green.svg)](#)
 [![Academic Project](https://img.shields.io/badge/Course-Cloud_Computing_Capstone-orange.svg)](#)
 [![Node Version](https://img.shields.io/badge/Node.js-v22.15.1-brightgreen.svg)](#)
-[![Total Tests](https://img.shields.io/badge/Total_Tests-35%20Passed-brightgreen.svg)](#)
-[![Backend Tests](https://img.shields.io/badge/Backend_Tests-25%20Passed-brightgreen.svg)](#)
-[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-10%20Passed-brightgreen.svg)](#)
+[![Total Tests](https://img.shields.io/badge/Total_Tests-75%20Passed-brightgreen.svg)](#)
+[![Backend Tests](https://img.shields.io/badge/Backend_Tests-55%20Passed-brightgreen.svg)](#)
+[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-20%20Passed-brightgreen.svg)](#)
 
 A secure, full-stack enterprise web application designed for small-to-medium organizations and IT administrators to manage the complete lifecycle of physical IT hardware assets and track software license seat allocations, compliance, and upcoming renewal expirations.
 
@@ -187,5 +187,47 @@ Detailed architectural and engineering documentation is maintained in the `docs/
 | **Module 2** | **COMPLETED** | Administrator provisioning CLI, bcrypt hashing, server-managed sessions, login/logout/me APIs, rate limiting, audit logging. |
 | **Module 2.1** | **COMPLETED** | Authentication security hardening: Cookie-only token isolation, zero JSON token leakage, strict CSRF/CORS origin defense, standardized `ADMIN_PASSWORD` provisioning, Secure cookie verification (25 tests passed). |
 | **Module 3** | **COMPLETED** | React SPA frontend foundation (Vite), enterprise design system, cookie authentication integration, protected routes, responsive navigation, honest dashboard metrics, and placeholders (10 tests passed; 35 total tests). |
-| **Module 4** | *Awaiting Authorization* | Hardware asset CRUD, category filters, employee assignment state machine, and custody history. |
+| **Module 4** | **COMPLETED** | Hardware asset inventory CRUD, category/status filters, employee directory CRUD, atomic transaction assignment and return lifecycle, custody history timeline, live dashboard integration (55 backend + 20 frontend = 75 total tests passed). |
+| **Module 5** | *Awaiting Authorization* | Enterprise software license tracking, utilized vs total seat calculation, employee seat allocations. |
+
+---
+
+## 7. Module 4: IT Asset Inventory, Employees & Assignment Lifecycle
+
+### 7.1 Implemented API Endpoints
+
+All endpoints are authenticated using server-side cookie sessions (`HttpOnly` session cookie):
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/employees` | List employees with search (`search`), department (`department`), status (`status`), and pagination (`page`, `limit`). |
+| `GET` | `/api/employees/:id` | Get single employee profile. |
+| `POST` | `/api/employees` | Create employee (validates unique `employee_code`, `email`, active department). |
+| `PUT` | `/api/employees/:id` | Update employee details (conflict check for duplicate code/email). |
+| `DELETE` | `/api/employees/:id` | Delete employee (returns `409 Conflict` if employee has prior assignment history to preserve audit trails). |
+| `GET` | `/api/assets` | List hardware assets with joined custodian details, category, status, and search filters. |
+| `GET` | `/api/assets/:id` | Get single asset details with current custodian. |
+| `POST` | `/api/assets` | Register new hardware asset (validates unique `asset_tag`, category, non-negative cost). |
+| `PUT` | `/api/assets/:id` | Update asset attributes (prevents silent removal of assigned custodian). |
+| `DELETE` | `/api/assets/:id` | Delete asset (blocked with `409 Conflict` if assignment history exists). |
+| `GET` | `/api/assets/:id/history` | Chronological custody assignment history for the asset. |
+| `POST` | `/api/assets/:id/assign` | Atomic transaction: Assign available asset to active employee, update status to `ASSIGNED`, record history. |
+| `POST` | `/api/assets/:id/return` | Atomic transaction: Return assigned asset, update status to `AVAILABLE`, record return history. |
+
+### 7.2 Running and Testing Module 4
+
+```powershell
+# Run the complete test suite (75 passing tests across backend & frontend)
+npm test
+
+# Run backend test suite only (55 passing tests)
+npm run backend:test
+
+# Run frontend test suite only (20 passing tests)
+npm run frontend:test
+
+# Build production bundle
+npm run frontend:build
+```
+
 

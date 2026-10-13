@@ -18,8 +18,7 @@ function globalErrorHandler(err, req, res, next) {
 
   res.status(status).json({
     success: false,
-    error: err.message || 'Internal Server Error',
-    ...(isProduction ? {} : { stack: err.stack })
+    error: err.message || 'Internal Server Error'
   });
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Laptop,
   CheckCircle2,
@@ -6,19 +6,34 @@ import {
   KeyRound,
   AlertTriangle,
   Server,
-  Activity,
+  Users,
   Layers,
-  Shield,
-  ArrowRight
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { healthApi } from '../api/healthApi';
+import { assetApi } from '../api/assetApi';
+import { employeeApi } from '../api/employeeApi';
 
 export function DashboardPage() {
   const { user } = useAuth();
+
+  // Health state
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(true);
 
+  // Asset & Employee metrics state
+  const [metrics, setMetrics] = useState({
+    totalAssets: null,
+    assignedAssets: null,
+    availableAssets: null,
+    totalEmployees: null
+  });
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  const [metricsError, setMetricsError] = useState(null);
+
+  // Fetch health
   useEffect(() => {
     let isMounted = true;
     async function fetchHealth() {
@@ -45,43 +60,39 @@ export function DashboardPage() {
     };
   }, []);
 
-  const kpiCards = [
-    {
-      title: 'Total Hardware Assets',
-      icon: Laptop,
-      statusBadge: 'Pending Module 4 API',
-      moduleNote: 'Hardware asset inventory & specs',
-      color: 'primary'
-    },
-    {
-      title: 'Assigned Assets',
-      icon: CheckCircle2,
-      statusBadge: 'Pending Module 4 API',
-      moduleNote: 'Active employee custody tracking',
-      color: 'success'
-    },
-    {
-      title: 'Available Assets',
-      icon: Clock,
-      statusBadge: 'Pending Module 4 API',
-      moduleNote: 'Inventory available for assignment',
-      color: 'info'
-    },
-    {
-      title: 'Software Licenses',
-      icon: KeyRound,
-      statusBadge: 'Pending Module 5 API',
-      moduleNote: 'Total seat capacity & allocations',
-      color: 'primary'
-    },
-    {
-      title: 'Licenses Near Expiry',
-      icon: AlertTriangle,
-      statusBadge: 'Pending Module 6 API',
-      moduleNote: 'Renewals expiring in 30 days',
-      color: 'warning'
+  // Fetch real inventory and employee metrics
+  const fetchMetrics = useCallback(async () => {
+    try {
+      setMetricsLoading(true);
+      setMetricsError(null);
+
+      const [assetRes, empRes] = await Promise.all([
+        assetApi.list({ limit: 1000 }),
+        employeeApi.list({ limit: 1 })
+      ]);
+
+      const allAssets = assetRes.assets || [];
+      const totalAssets = assetRes.pagination?.total ?? allAssets.length;
+      const assignedAssets = allAssets.filter(a => a.status === 'ASSIGNED').length;
+      const availableAssets = allAssets.filter(a => a.status === 'AVAILABLE').length;
+      const totalEmployees = empRes.pagination?.total ?? (empRes.employees ? empRes.employees.length : 0);
+
+      setMetrics({
+        totalAssets,
+        assignedAssets,
+        availableAssets,
+        totalEmployees
+      });
+    } catch (err) {
+      setMetricsError(err.message || 'Unable to retrieve inventory metrics from backend.');
+    } finally {
+      setMetricsLoading(false);
     }
-  ];
+  }, []);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [fetchMetrics]);
 
   return (
     <div className="dashboard-container">
@@ -147,41 +158,187 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Honest Metric KPI Cards */}
-      <div style={{ marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-slate-900)', marginBottom: '4px' }}>
-          System Metrics & Inventory Summary
-        </h3>
-        <p style={{ fontSize: '0.86rem', color: 'var(--color-slate-500)', marginBottom: '16px' }}>
-          In accordance with project guidelines, live asset and license counts are staged for subsequent authorized modules.
-        </p>
+      {/* Metrics Section Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--color-slate-900)', marginBottom: '4px' }}>
+            System Metrics & Inventory Summary
+          </h3>
+          <p style={{ fontSize: '0.86rem', color: 'var(--color-slate-500)' }}>
+            Empirically derived from active database records in Module 4.
+          </p>
+        </div>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={fetchMetrics}
+          disabled={metricsLoading}
+          title="Refresh metrics"
+        >
+          <RefreshCw size={14} className={metricsLoading ? 'spinner' : ''} />
+          Refresh Metrics
+        </button>
       </div>
 
+      {/* Metrics Error State */}
+      {metricsError && (
+        <div className="alert-banner alert-danger" style={{ marginBottom: '24px' }}>
+          <AlertCircle size={20} />
+          <div style={{ flex: 1 }}>
+            <strong>Unable to load inventory metrics:</strong> {metricsError}
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={fetchMetrics}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* KPI Cards Grid */}
       <div className="metrics-grid">
-        {kpiCards.map((kpi, idx) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={idx} className="metric-card">
-              <div className="metric-card-top">
-                <span className="metric-label">{kpi.title}</span>
-                <div className="metric-icon-box">
-                  <Icon size={20} />
-                </div>
-              </div>
-              <div className="metric-value-box">
-                <span className="metric-value-placeholder">--</span>
-              </div>
-              <div>
-                <span className="metric-badge badge-pending">
-                  {kpi.statusBadge}
-                </span>
-                <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
-                  {kpi.moduleNote}
-                </p>
-              </div>
+        {/* Total Hardware Assets */}
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <span className="metric-label">Total Hardware Assets</span>
+            <div className="metric-icon-box">
+              <Laptop size={20} />
             </div>
-          );
-        })}
+          </div>
+          <div className="metric-value-box">
+            {metricsLoading ? (
+              <span className="metric-value-placeholder">...</span>
+            ) : metricsError ? (
+              <span className="metric-value-placeholder" style={{ color: 'var(--color-danger-text)' }}>Unavailable</span>
+            ) : (
+              <span style={{ fontSize: '1.85rem', fontWeight: 700, color: 'var(--color-slate-900)' }}>
+                {metrics.totalAssets}
+              </span>
+            )}
+          </div>
+          <div>
+            <span className="metric-badge badge-success">Live Module 4 API</span>
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
+              Total registered hardware inventory
+            </p>
+          </div>
+        </div>
+
+        {/* Assigned Assets */}
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <span className="metric-label">Assigned Assets</span>
+            <div className="metric-icon-box">
+              <CheckCircle2 size={20} />
+            </div>
+          </div>
+          <div className="metric-value-box">
+            {metricsLoading ? (
+              <span className="metric-value-placeholder">...</span>
+            ) : metricsError ? (
+              <span className="metric-value-placeholder" style={{ color: 'var(--color-danger-text)' }}>Unavailable</span>
+            ) : (
+              <span style={{ fontSize: '1.85rem', fontWeight: 700, color: 'var(--color-primary-600)' }}>
+                {metrics.assignedAssets}
+              </span>
+            )}
+          </div>
+          <div>
+            <span className="metric-badge badge-success">Live Module 4 API</span>
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
+              Active employee custody tracking
+            </p>
+          </div>
+        </div>
+
+        {/* Available Assets */}
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <span className="metric-label">Available Assets</span>
+            <div className="metric-icon-box">
+              <Clock size={20} />
+            </div>
+          </div>
+          <div className="metric-value-box">
+            {metricsLoading ? (
+              <span className="metric-value-placeholder">...</span>
+            ) : metricsError ? (
+              <span className="metric-value-placeholder" style={{ color: 'var(--color-danger-text)' }}>Unavailable</span>
+            ) : (
+              <span style={{ fontSize: '1.85rem', fontWeight: 700, color: 'var(--color-success-text)' }}>
+                {metrics.availableAssets}
+              </span>
+            )}
+          </div>
+          <div>
+            <span className="metric-badge badge-success">Live Module 4 API</span>
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
+              Inventory ready for employee issuance
+            </p>
+          </div>
+        </div>
+
+        {/* Total Employees */}
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <span className="metric-label">Total Employees</span>
+            <div className="metric-icon-box">
+              <Users size={20} />
+            </div>
+          </div>
+          <div className="metric-value-box">
+            {metricsLoading ? (
+              <span className="metric-value-placeholder">...</span>
+            ) : metricsError ? (
+              <span className="metric-value-placeholder" style={{ color: 'var(--color-danger-text)' }}>Unavailable</span>
+            ) : (
+              <span style={{ fontSize: '1.85rem', fontWeight: 700, color: 'var(--color-slate-900)' }}>
+                {metrics.totalEmployees}
+              </span>
+            )}
+          </div>
+          <div>
+            <span className="metric-badge badge-success">Live Module 4 API</span>
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
+              Registered personnel in directory
+            </p>
+          </div>
+        </div>
+
+        {/* Software Licenses - Staged Pending Module 5 */}
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <span className="metric-label">Software Licenses</span>
+            <div className="metric-icon-box">
+              <KeyRound size={20} />
+            </div>
+          </div>
+          <div className="metric-value-box">
+            <span className="metric-value-placeholder">--</span>
+          </div>
+          <div>
+            <span className="metric-badge badge-pending">Pending Module 5 API</span>
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
+              Total seat capacity & allocations
+            </p>
+          </div>
+        </div>
+
+        {/* Licenses Near Expiry - Staged Pending Module 6 */}
+        <div className="metric-card">
+          <div className="metric-card-top">
+            <span className="metric-label">Licenses Near Expiry</span>
+            <div className="metric-icon-box">
+              <AlertTriangle size={20} />
+            </div>
+          </div>
+          <div className="metric-value-box">
+            <span className="metric-value-placeholder">--</span>
+          </div>
+          <div>
+            <span className="metric-badge badge-pending">Pending Module 6 API</span>
+            <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
+              Renewals expiring in 30 days
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Staged Implementation Roadmap */}
@@ -197,19 +354,19 @@ export function DashboardPage() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '12px' }}>
-          <div style={{ padding: '16px', backgroundColor: 'var(--color-slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+          <div style={{ padding: '16px', backgroundColor: 'var(--color-primary-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-primary-200)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <Layers size={18} color="var(--color-primary-600)" />
-              <strong style={{ fontSize: '0.92rem', color: 'var(--color-slate-800)' }}>Module 4: Assets & Custody</strong>
+              <strong style={{ fontSize: '0.92rem', color: 'var(--color-primary-800)' }}>Module 4: Assets & Custody (Active)</strong>
             </div>
-            <p style={{ fontSize: '0.84rem', color: 'var(--color-slate-600)', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.84rem', color: 'var(--color-slate-700)', lineHeight: 1.5 }}>
               Hardware asset inventory CRUD, category filters, employee assignment state machine, and historical custody preservation.
             </p>
           </div>
 
           <div style={{ padding: '16px', backgroundColor: 'var(--color-slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <KeyRound size={18} color="var(--color-primary-600)" />
+              <KeyRound size={18} color="var(--color-slate-500)" />
               <strong style={{ fontSize: '0.92rem', color: 'var(--color-slate-800)' }}>Module 5: Software Licenses</strong>
             </div>
             <p style={{ fontSize: '0.84rem', color: 'var(--color-slate-600)', lineHeight: 1.5 }}>
@@ -219,7 +376,7 @@ export function DashboardPage() {
 
           <div style={{ padding: '16px', backgroundColor: 'var(--color-slate-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <AlertTriangle size={18} color="var(--color-warning-dot)" />
+              <AlertTriangle size={18} color="var(--color-slate-500)" />
               <strong style={{ fontSize: '0.92rem', color: 'var(--color-slate-800)' }}>Module 6: Expiry & Reporting</strong>
             </div>
             <p style={{ fontSize: '0.84rem', color: 'var(--color-slate-600)', lineHeight: 1.5 }}>

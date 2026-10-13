@@ -239,3 +239,26 @@ cloud/
 └── data/                           # Local SQLite storage directory (ignored in git)
     └── .gitkeep
 ```
+
+---
+
+## 8. Module 4: Asset Inventory, Employee Custody & Assignment Architecture
+
+### 8.1 Layered Endpoint Structure
+- **Employee Subsystem**:
+  - `GET /api/employees`: Paginated, filterable directory with search by code, name, email, department.
+  - `GET /api/employees/:id`: Single employee profile query.
+  - `POST /api/employees`: Validates unique code/email, trims strings, creates employee with audit log.
+  - `PUT /api/employees/:id`: Updates employee metadata.
+  - `DELETE /api/employees/:id`: Checks assignment history in `asset_assignment_history`; returns HTTP 409 Conflict if history exists to prevent audit destruction, allowing physical deletion only for zero-history records.
+- **Hardware Asset Subsystem**:
+  - `GET /api/assets`: Paginated inventory joined with `employees` for current custody details.
+  - `GET /api/assets/:id`: Full asset specifications with joined active custodian.
+  - `POST /api/assets`: Enforces unique asset tag, category validation, and non-negative purchase costs.
+  - `PUT /api/assets/:id`: Updates device attributes while prohibiting silent assignment removal on assigned assets.
+  - `DELETE /api/assets/:id`: Rejects deletion with 409 Conflict if historical custody records exist.
+- **Custody Assignment & Return Subsystem**:
+  - `GET /api/assets/:id/history`: Chronological assignment audit records with custodian details and notes.
+  - `POST /api/assets/:id/assign`: Atomic transaction assigning available asset to active employee and recording history.
+  - `POST /api/assets/:id/return`: Atomic transaction returning assigned asset to available pool and recording return history.
+
