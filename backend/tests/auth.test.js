@@ -9,7 +9,8 @@ const bcrypt = require('bcryptjs');
 const app = require('../src/app');
 const db = require('../src/config/database');
 const { migrate } = require('../src/db/migrate');
-const { validatePassword } = require('../src/scripts/createAdmin');
+const { validatePassword, provisionAdmin } = require('../src/scripts/createAdmin');
+const { getCookieOptions } = require('../src/controllers/auth.controller');
 
 const TEST_DB_PATH = path.resolve(__dirname, '../../data/test_auth_db.db');
 process.env.DB_PATH = TEST_DB_PATH;
@@ -21,7 +22,7 @@ const TEST_ADMIN = {
   fullName: 'Security Test Administrator'
 };
 
-let activeSessionToken = null;
+let activeSessionCookie = null;
 let testAdminId = null;
 
 test.before(async () => {
@@ -63,9 +64,9 @@ test('1. Password policy enforces minimum length and complexity', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Login Tests
+// 2. Login Tests: HttpOnly Cookie Exclusivity & No Token in JSON
 // ---------------------------------------------------------------------------
-test('2. POST /api/auth/login succeeds with valid username and password', async () => {
+test('2. Successful login sets HttpOnly cookie and does NOT return session token in JSON', async () => {
   const response = await request(app)
     .post('/api/auth/login')
     .send({
@@ -77,18 +78,27 @@ test('2. POST /api/auth/login succeeds with valid username and password', async 
 
   const body = response.body;
   assert.strictEqual(body.success, true);
-  assert.ok(body.data.token, 'Must return session token');
+
+  // CRITICAL REQUIREMENT: Token must NOT be exposed in JSON response body
+  assert.strictEqual(body.data.token, undefined, 'Login JSON data MUST NOT contain raw session token');
+  assert.strictEqual(body.token, undefined, 'Login JSON root MUST NOT contain raw session token');
+
+  // Verify sanitized administrator profile
   assert.strictEqual(body.data.administrator.username, TEST_ADMIN.username);
   assert.strictEqual(body.data.administrator.email, TEST_ADMIN.email);
   assert.strictEqual(body.data.administrator.password_hash, undefined, 'Must NEVER return password_hash');
+  assert.strictEqual(body.data.administrator.sessionId, undefined, 'Must NEVER expose sessionId in profile');
 
-  // Verify Set-Cookie header contains HttpOnly session_id
+  // Verify Set-Cookie header contains HttpOnly session_id with Path=/ and SameSite=Lax
   const setCookie = response.headers['set-cookie'];
   assert.ok(setCookie, 'Must set session cookie');
-  assert.ok(setCookie.some((c) => c.includes('session_id=')), 'Cookie must contain session_id');
-  assert.ok(setCookie.some((c) => c.includes('HttpOnly')), 'Cookie must be HttpOnly');
+  const sessionCookieHeader = setCookie.find((c) => c.startsWith('session_id='));
+  assert.ok(sessionCookieHeader, 'Cookie must be named session_id');
+  assert.ok(sessionCookieHeader.includes('HttpOnly'), 'Cookie must specify HttpOnly');
+  assert.ok(sessionCookieHeader.includes('Path=/'), 'Cookie must specify Path=/');
+  assert.ok(sessionCookieHeader.toLowerCase().includes('samesite=lax'), 'Cookie must specify SameSite=Lax');
 
-  activeSessionToken = body.data.token;
+  activeSessionCookie = sessionCookieHeader;
 
   // Verify audit log recorded LOGIN_SUCCESS
   const log = await db.get(
@@ -109,6 +119,7 @@ test('3. POST /api/auth/login succeeds with email identifier (case-insensitive)'
     .expect(200);
 
   assert.strictEqual(response.body.success, true);
+  assert.strictEqual(response.body.data.token, undefined, 'No token in email login JSON');
   assert.strictEqual(response.body.data.administrator.email, TEST_ADMIN.email);
 });
 
@@ -159,30 +170,22 @@ test('6. POST /api/auth/login returns 400 Bad Request on missing fields', async 
 });
 
 // ---------------------------------------------------------------------------
-// 3. Protected Route & Profile Verification Tests
+// 3. Cookie-Based Protected Route Verification Tests
 // ---------------------------------------------------------------------------
 test('7. GET /api/auth/me returns profile using cookie session', async () => {
   const response = await request(app)
     .get('/api/auth/me')
-    .set('Cookie', [`session_id=${activeSessionToken}`])
+    .set('Cookie', [activeSessionCookie])
     .expect(200);
 
   const admin = response.body.data.administrator;
   assert.strictEqual(admin.username, TEST_ADMIN.username);
   assert.strictEqual(admin.email, TEST_ADMIN.email);
-  assert.strictEqual(admin.password_hash, undefined);
+  assert.strictEqual(admin.password_hash, undefined, 'Must not leak password_hash');
+  assert.strictEqual(admin.sessionId, undefined, 'Must not leak sessionId');
 });
 
-test('8. GET /api/auth/me returns profile using Authorization Bearer header', async () => {
-  const response = await request(app)
-    .get('/api/auth/me')
-    .set('Authorization', `Bearer ${activeSessionToken}`)
-    .expect(200);
-
-  assert.strictEqual(response.body.data.administrator.username, TEST_ADMIN.username);
-});
-
-test('9. GET /api/auth/me returns 401 Unauthorized when unauthenticated', async () => {
+test('8. GET /api/auth/me returns 401 Unauthorized when unauthenticated', async () => {
   const response = await request(app)
     .get('/api/auth/me')
     .expect(401);
@@ -191,16 +194,16 @@ test('9. GET /api/auth/me returns 401 Unauthorized when unauthenticated', async 
   assert.ok(response.body.error.includes('Authentication required'));
 });
 
-test('10. GET /api/auth/verify protects arbitrary routes from unauthenticated access', async () => {
-  // Without token -> 401
+test('9. GET /api/auth/verify protects arbitrary routes from unauthenticated access', async () => {
+  // Without cookie -> 401
   await request(app)
     .get('/api/auth/verify')
     .expect(401);
 
-  // With token -> 200
+  // With cookie -> 200
   const authed = await request(app)
     .get('/api/auth/verify')
-    .set('Authorization', `Bearer ${activeSessionToken}`)
+    .set('Cookie', [activeSessionCookie])
     .expect(200);
 
   assert.strictEqual(authed.body.success, true);
@@ -208,9 +211,9 @@ test('10. GET /api/auth/verify protects arbitrary routes from unauthenticated ac
 });
 
 // ---------------------------------------------------------------------------
-// 4. Session Expiration & CSRF Tests
+// 4. Session Expiration, CSRF & Security Attribute Tests
 // ---------------------------------------------------------------------------
-test('11. Protected routes reject expired sessions', async () => {
+test('10. Protected routes reject expired sessions', async () => {
   // Insert an expired session manually into test DB
   const expiredToken = 'expired_test_session_token_1234567890';
   await db.run(
@@ -221,43 +224,123 @@ test('11. Protected routes reject expired sessions', async () => {
 
   const response = await request(app)
     .get('/api/auth/me')
-    .set('Authorization', `Bearer ${expiredToken}`)
+    .set('Cookie', [`session_id=${expiredToken}`])
     .expect(401);
 
   assert.strictEqual(response.body.success, false);
   assert.ok(response.body.error.includes('expired or invalid'));
 });
 
-test('12. Cookie-based state-changing requests block cross-site CSRF origins', async () => {
+test('11. Cookie-based state-changing requests block cross-site CSRF origins', async () => {
   const response = await request(app)
     .post('/api/auth/logout')
-    .set('Cookie', [`session_id=${activeSessionToken}`])
+    .set('Cookie', [activeSessionCookie])
     .set('Origin', 'http://malicious-attacker-site.com')
     .expect(403);
 
   assert.strictEqual(response.body.success, false);
-  assert.ok(response.body.error.includes('Cross-site request blocked'));
+  assert.ok(
+    response.body.error.includes('blocked') ||
+    response.body.error.includes('CSRF validation failure')
+  );
+});
+
+test('12. Production cookies include the Secure attribute', () => {
+  const originalEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    const prodCookieOpts = getCookieOptions();
+    assert.strictEqual(prodCookieOpts.secure, true, 'Production cookies MUST have secure: true');
+    assert.strictEqual(prodCookieOpts.httpOnly, true, 'Production cookies MUST have httpOnly: true');
+    assert.strictEqual(prodCookieOpts.sameSite, 'lax', 'Production cookies MUST have sameSite: lax');
+    assert.strictEqual(prodCookieOpts.path, '/', 'Production cookies MUST have path: /');
+  } finally {
+    process.env.NODE_ENV = originalEnv;
+  }
 });
 
 // ---------------------------------------------------------------------------
-// 5. Logout Tests
+// 5. Logout & Session Revocation Tests
 // ---------------------------------------------------------------------------
-test('13. POST /api/auth/logout invalidates session and prevents reuse', async () => {
-  // Perform logout
+test('13. POST /api/auth/logout revokes session in SQLite and clears cookie', async () => {
+  // Perform logout with session cookie
   const response = await request(app)
     .post('/api/auth/logout')
-    .set('Authorization', `Bearer ${activeSessionToken}`)
+    .set('Cookie', [activeSessionCookie])
     .expect(200);
 
   assert.strictEqual(response.body.success, true);
 
-  // Verify session removed from sessions table in DB
-  const sessionInDb = await db.get('SELECT * FROM sessions WHERE id = ?', [activeSessionToken]);
-  assert.strictEqual(sessionInDb, undefined, 'Session must be deleted from sessions table');
+  // Verify Set-Cookie clears session_id with expiry in past
+  const setCookie = response.headers['set-cookie'];
+  assert.ok(setCookie, 'Must return clear-cookie header');
+  const clearedCookie = setCookie.find((c) => c.startsWith('session_id='));
+  assert.ok(clearedCookie, 'Must clear session_id cookie');
+  assert.ok(
+    clearedCookie.includes('Expires=') || clearedCookie.includes('Max-Age=0'),
+    'Cookie must be expired on logout'
+  );
 
-  // Verify subsequent request with the logged-out token returns 401
+  // Extract raw token from activeSessionCookie to check SQLite
+  const match = activeSessionCookie.match(/session_id=([^;]+)/);
+  const rawToken = match ? match[1] : null;
+
+  // Verify session is deleted from sessions table in DB
+  const sessionInDb = await db.get('SELECT * FROM sessions WHERE id = ?', [rawToken]);
+  assert.strictEqual(sessionInDb, undefined, 'Session MUST be deleted from sessions table');
+
+  // Verify subsequent request with the logged-out cookie returns 401 Unauthorized
   await request(app)
     .get('/api/auth/me')
-    .set('Authorization', `Bearer ${activeSessionToken}`)
+    .set('Cookie', [activeSessionCookie])
     .expect(401);
+});
+
+// ---------------------------------------------------------------------------
+// 6. Administrator Provisioning Environment Variable Test
+// ---------------------------------------------------------------------------
+test('14. Administrator provisioning uses documented ADMIN_PASSWORD environment variable', async () => {
+  const originalPass = process.env.ADMIN_PASSWORD;
+  const originalUser = process.env.ADMIN_USERNAME;
+  const originalEmail = process.env.ADMIN_EMAIL;
+
+  try {
+    process.env.ADMIN_USERNAME = 'provadmin';
+    process.env.ADMIN_EMAIL = 'provadmin@enterprise.local';
+    process.env.ADMIN_PASSWORD = 'ProvPassword999!';
+    process.env.ADMIN_NAME = 'Provisioned Administrator';
+
+    // Execute provisioning script
+    await provisionAdmin();
+
+    // Verify administrator in database
+    const admin = await db.get(
+      'SELECT id, username, email, password_hash FROM administrators WHERE username = ?',
+      ['provadmin']
+    );
+    assert.ok(admin, 'Provisioned administrator must exist in database');
+    assert.strictEqual(admin.email, 'provadmin@enterprise.local');
+    assert.notStrictEqual(admin.password_hash, 'ProvPassword999!', 'Password must NOT be stored in plaintext');
+
+    // Verify bcrypt hash matches the password
+    const matches = await bcrypt.compare('ProvPassword999!', admin.password_hash);
+    assert.strictEqual(matches, true, 'bcrypt hash must match documented ADMIN_PASSWORD');
+
+    // Verify automatic overwrite protection: attempting to provision again must NOT overwrite password
+    process.env.ADMIN_PASSWORD = 'NewAttemptPassword123!';
+    await provisionAdmin();
+    const adminAfter = await db.get(
+      'SELECT password_hash FROM administrators WHERE username = ?',
+      ['provadmin']
+    );
+    assert.strictEqual(
+      adminAfter.password_hash,
+      admin.password_hash,
+      'Existing administrator password must NOT be overwritten automatically'
+    );
+  } finally {
+    process.env.ADMIN_PASSWORD = originalPass;
+    process.env.ADMIN_USERNAME = originalUser;
+    process.env.ADMIN_EMAIL = originalEmail;
+  }
 });

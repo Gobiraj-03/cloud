@@ -141,7 +141,6 @@ class AuthService {
       email: sessionData.email,
       fullName: sessionData.full_name,
       role: sessionData.role,
-      sessionId: sessionData.session_id,
       sessionExpiresAt: sessionData.expires_at
     };
   }

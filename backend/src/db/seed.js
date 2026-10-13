@@ -20,7 +20,7 @@ async function seed(customDbPath = null) {
     let adminId = existingAdmin ? existingAdmin.id : null;
 
     if (!existingAdmin) {
-      const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'test' ? 'TestAdminPass123!' : null);
+      const initialPassword = process.env.ADMIN_PASSWORD || process.env.ADMIN_INITIAL_PASSWORD || (process.env.NODE_ENV === 'test' ? 'TestAdminPass123!' : null);
       if (initialPassword) {
         const bcrypt = require('bcryptjs');
         const hash = await bcrypt.hash(initialPassword, 10);

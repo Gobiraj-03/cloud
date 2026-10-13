@@ -6,7 +6,7 @@ function getCookieOptions() {
   return {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? 'strict' : 'lax',
+    sameSite: 'lax',
     path: '/',
     maxAge: 8 * 3600 * 1000 // 8 hours in milliseconds
   };
@@ -32,14 +32,14 @@ async function login(req, res, next) {
       userAgent
     });
 
-    // Set secure HttpOnly session cookie
+    // Set secure HttpOnly session cookie - token is kept EXCLUSIVELY in the cookie
     res.cookie(SESSION_COOKIE_NAME, result.sessionToken, getCookieOptions());
 
+    // Do NOT return the raw session token in JSON; return only success and profile
     return res.status(200).json({
       success: true,
       message: 'Authentication successful.',
       data: {
-        token: result.sessionToken,
         administrator: result.administrator
       }
     });
@@ -60,13 +60,13 @@ async function logout(req, res, next) {
 
     await AuthService.logout({ sessionToken, adminId, ipAddress });
 
-    // Clear session cookie
-    const isProduction = process.env.NODE_ENV === 'production';
+    // Clear session cookie using identical options
+    const cookieOpts = getCookieOptions();
     res.clearCookie(SESSION_COOKIE_NAME, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'strict' : 'lax',
-      path: '/'
+      httpOnly: cookieOpts.httpOnly,
+      secure: cookieOpts.secure,
+      sameSite: cookieOpts.sameSite,
+      path: cookieOpts.path
     });
 
     return res.status(200).json({
@@ -98,5 +98,6 @@ async function getCurrentUser(req, res, next) {
 module.exports = {
   login,
   logout,
-  getCurrentUser
+  getCurrentUser,
+  getCookieOptions
 };

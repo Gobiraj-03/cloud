@@ -3,21 +3,14 @@ const { AuthService } = require('../services/auth.service');
 const SESSION_COOKIE_NAME = 'session_id';
 
 /**
- * Extracts session token from HTTP request cookies or Authorization header.
+ * Extracts opaque session token exclusively from the HttpOnly session cookie.
+ * (Browser React frontend relies strictly on secure cookie storage to prevent XSS theft).
  */
 function extractSessionToken(req) {
-  // 1. Check HttpOnly cookie
   if (req.cookies && req.cookies[SESSION_COOKIE_NAME]) {
-    return { token: req.cookies[SESSION_COOKIE_NAME], source: 'cookie' };
+    return req.cookies[SESSION_COOKIE_NAME];
   }
-
-  // 2. Check Authorization Bearer header
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return { token: authHeader.slice(7).trim(), source: 'header' };
-  }
-
-  return { token: null, source: null };
+  return null;
 }
 
 /**
@@ -25,27 +18,43 @@ function extractSessionToken(req) {
  */
 async function authenticate(req, res, next) {
   try {
-    const { token, source } = extractSessionToken(req);
+    const token = extractSessionToken(req);
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: 'Authentication required. No active session provided.'
+        error: 'Authentication required. No active session cookie provided.'
       });
     }
 
     // CSRF Protection for state-changing HTTP methods authenticated via cookies
     const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
-    if (source === 'cookie' && stateChangingMethods.includes(req.method)) {
-      const origin = req.headers.origin || req.headers.referer;
-      const expectedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
-      
-      // If origin header is present, verify against configured CORS origin
-      if (origin && !origin.startsWith(expectedOrigin)) {
+    if (stateChangingMethods.includes(req.method)) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      const expectedOrigin = process.env.CORS_ORIGIN || (isProduction ? null : 'http://localhost:5173');
+
+      if (isProduction && !process.env.CORS_ORIGIN) {
         return res.status(403).json({
           success: false,
-          error: 'Cross-site request blocked (CSRF validation failure).'
+          error: 'Security misconfiguration: CORS_ORIGIN is not configured in production.'
         });
+      }
+
+      const originHeader = req.headers.origin || req.headers.referer;
+      if (originHeader) {
+        let requestOrigin;
+        try {
+          requestOrigin = new URL(originHeader).origin;
+        } catch {
+          requestOrigin = originHeader;
+        }
+
+        if (requestOrigin !== expectedOrigin) {
+          return res.status(403).json({
+            success: false,
+            error: 'Cross-site request blocked (CSRF validation failure).'
+          });
+        }
       }
     }
 

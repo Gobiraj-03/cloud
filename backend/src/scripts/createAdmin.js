@@ -78,7 +78,7 @@ async function provisionAdmin() {
 
   const envUser = process.env.ADMIN_USERNAME;
   const envEmail = process.env.ADMIN_EMAIL;
-  const envPass = process.env.ADMIN_PASSWORD;
+  const envPass = process.env.ADMIN_PASSWORD || process.env.ADMIN_INITIAL_PASSWORD;
   const envName = process.env.ADMIN_NAME;
 
   let username = envUser;
@@ -135,6 +135,19 @@ async function provisionAdmin() {
 
     let adminId;
     if (existing) {
+      // Never overwrite an existing administrator password automatically
+      if (process.env.ADMIN_OVERWRITE !== 'true') {
+        if (process.stdin.isTTY && !envPass) {
+          const confirm = await askQuestion(rl, `Administrator '${existing.username}' already exists. Overwrite password? (y/N): `);
+          if (confirm.toLowerCase() !== 'y' && confirm.toLowerCase() !== 'yes') {
+            console.log(`[Provisioning] Overwrite cancelled. Password for '${existing.username}' was preserved.`);
+            return { id: existing.id, overwritten: false };
+          }
+        } else {
+          console.log(`[Provisioning] Administrator '${existing.username}' already exists. Automatic overwrite prevented.`);
+          return { id: existing.id, overwritten: false };
+        }
+      }
       console.log(`[Provisioning] Updating existing administrator '${existing.username}' (ID: ${existing.id})...`);
       await db.run(
         `UPDATE administrators

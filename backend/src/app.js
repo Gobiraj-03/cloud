@@ -7,10 +7,27 @@ const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandl
 
 const app = express();
 
-// Security and utility middleware
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+// Security and utility middleware: Strict CORS origin validation
+const isProduction = process.env.NODE_ENV === 'production';
+const allowedOrigin = process.env.CORS_ORIGIN || (isProduction ? null : 'http://localhost:5173');
+
 app.use(cors({
-  origin: corsOrigin,
+  origin: function (origin, callback) {
+    // Non-browser requests without origin header (e.g., automated tests, server health checks)
+    if (!origin) return callback(null, true);
+
+    if (isProduction && !process.env.CORS_ORIGIN) {
+      return callback(new Error('CORS misconfiguration: CORS_ORIGIN must be explicitly defined in production.'));
+    }
+
+    if (origin === allowedOrigin) {
+      return callback(null, true);
+    }
+
+    const corsError = new Error(`Origin '${origin}' blocked by CORS policy.`);
+    corsError.statusCode = 403;
+    return callback(corsError);
+  },
   credentials: true
 }));
 

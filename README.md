@@ -4,7 +4,7 @@
 [![Budget Constraint](https://img.shields.io/badge/Budget-₹0_Strict-green.svg)](#)
 [![Academic Project](https://img.shields.io/badge/Course-Cloud_Computing_Capstone-orange.svg)](#)
 [![Node Version](https://img.shields.io/badge/Node.js-v22.15.1-brightgreen.svg)](#)
-[![Backend Tests](https://img.shields.io/badge/Backend_Tests-24%20Passed-brightgreen.svg)](#)
+[![Backend Tests](https://img.shields.io/badge/Backend_Tests-25%20Passed-brightgreen.svg)](#)
 
 A secure, full-stack enterprise web application designed for small-to-medium organizations and IT administrators to manage the complete lifecycle of physical IT hardware assets and track software license seat allocations, compliance, and upcoming renewal expirations.
 
@@ -33,7 +33,8 @@ This system provides a centralized, auditable, and responsive web platform that 
 | - Zero external cloud cost (₹0.00)                                                              |
 | - Layered architecture (Routes -> Controllers -> Services -> Repositories)                      |
 | - Parameterized SQL queries for injection security                                              |
-| - Server-managed session store in SQLite with HttpOnly cookies & Bearer fallback                |
+| - Server-managed session store in SQLite with HttpOnly cookies exclusively (zero JSON tokens)   |
+| - Strict CSRF origin validation and CORS protection for state-changing requests                 |
 | - Database abstraction ready for seamless PostgreSQL migration                                   |
 +--------------------------------------------------------------------------------------------------+
 
@@ -80,7 +81,7 @@ npm run admin:create
 # Option B: Non-interactive via environment variables (clean for automation)
 $env:ADMIN_USERNAME="admin"; $env:ADMIN_EMAIL="admin@enterprise.local"; $env:ADMIN_PASSWORD="SecurePassword123!"; npm run admin:create
 
-# 6. Execute automated test suite (24 unit, security, and integration tests)
+# 6. Execute automated test suite (25 unit, security, and integration tests)
 npm test
 
 # 7. Start the Express backend server
@@ -98,27 +99,30 @@ In a separate PowerShell terminal:
 # 1. Verify system health probe
 Invoke-RestMethod -Uri http://localhost:5000/api/health
 
-# 2. Log in with provisioned credentials
+# 2. Log in with provisioned credentials (Session cookie stored in $webSession)
 $loginBody = @{ identifier = "admin"; password = "SecurePassword123!" } | ConvertTo-Json
-$loginResponse = Invoke-RestMethod -Uri http://localhost:5000/api/auth/login -Method Post -Body $loginBody -ContentType "application/json"
-$token = $loginResponse.data.token
-Write-Host "Obtained Session Token: $token"
+$loginResponse = Invoke-WebRequest -Uri http://localhost:5000/api/auth/login `
+    -Method Post -Body $loginBody -ContentType "application/json" -SessionVariable webSession
 
-# 3. Query current authenticated administrator profile
-$headers = @{ Authorization = "Bearer $token" }
-Invoke-RestMethod -Uri http://localhost:5000/api/auth/me -Headers $headers
+Write-Host "Login Status: $($loginResponse.StatusCode) OK"
+Write-Host "Response Body (Zero raw session tokens returned):"
+$loginResponse.Content
+
+# 3. Query current authenticated administrator profile using cookie session
+$meResponse = Invoke-RestMethod -Uri http://localhost:5000/api/auth/me -WebSession $webSession
+$meResponse.data.administrator
 
 # 4. Verify access to protected test route
-Invoke-RestMethod -Uri http://localhost:5000/api/auth/verify -Headers $headers
+Invoke-RestMethod -Uri http://localhost:5000/api/auth/verify -WebSession $webSession
 
-# 5. Log out and invalidate session
-Invoke-RestMethod -Uri http://localhost:5000/api/auth/logout -Method Post -Headers $headers
+# 5. Log out and invalidate session in database + clear cookie
+Invoke-RestMethod -Uri http://localhost:5000/api/auth/logout -Method Post -WebSession $webSession
 
-# 6. Verify previous token is immediately rejected (Returns 401 Unauthorized)
+# 6. Verify subsequent request with previous session returns 401 Unauthorized
 try {
-    Invoke-RestMethod -Uri http://localhost:5000/api/auth/me -Headers $headers
+    Invoke-RestMethod -Uri http://localhost:5000/api/auth/me -WebSession $webSession
 } catch {
-    Write-Host "Token successfully revoked: $($_.Exception.Message)"
+    Write-Host "Session successfully revoked in SQLite: $($_.Exception.Message)"
 }
 ```
 
@@ -130,20 +134,25 @@ try {
    - Salting and hashing via `bcrypt` with 10 rounds of work factor.
    - Zero plaintext passwords in code, database, seed scripts, or logs.
    - Policy: Minimum 8 characters with at least one number or special character.
+   - Provisioning CLI prevents automatic overwrite of existing administrator passwords without explicit confirmation.
 2. **Server-Managed Session Store**:
    - Persistent `sessions` table in SQLite with foreign key cascade to `administrators(id)`.
    - 256-bit cryptographically random tokens (`crypto.randomBytes(32)`).
    - Sessions expire after 8 hours; expired tokens are rejected in SQL.
    - True server-side revocation: Logout deletes the record from SQLite immediately.
-3. **Dual Client Support (Cookies & Bearer)**:
-   - Primary: `HttpOnly`, `SameSite=Lax` (Strict in prod), `Path=/` cookie named `session_id`.
-   - Secondary: `Authorization: Bearer <token>` header for cross-origin API clients and tests.
-4. **Brute-Force & Timing Attack Defenses**:
+3. **Strict Cookie-Only Browser Authentication**:
+   - Session tokens are stored **exclusively** in an `HttpOnly`, `SameSite=Lax`, `Path=/` cookie named `session_id`.
+   - In production (`NODE_ENV=production`), cookies automatically enforce `Secure=true`.
+   - **Zero token exposure in JSON**: `POST /api/auth/login` returns only `{ success: true, data: { administrator } }` without exposing raw session identifiers to browser JavaScript.
+   - Cookie is cleared upon logout using identical options (`httpOnly`, `sameSite`, `path`, `secure`).
+4. **CORS & CSRF Defense**:
+   - Strict origin validation: API requests with untrusted origins are rejected with `HTTP 403 Forbidden`.
+   - Missing or wildcard origins are blocked for credentialed requests.
+   - State-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`) require trusted origin validation matching `CORS_ORIGIN`.
+5. **Brute-Force & Timing Attack Defenses**:
    - Generic authentication failure response for invalid username/email or password (prevents account enumeration).
    - Constant-time bcrypt comparison execution even when user is not found.
    - Rate limiting on `/api/auth/login`: Maximum 5 attempts per IP per 15-minute window.
-5. **CSRF Mitigation**:
-   - Origin and Referer validation for state-changing requests authenticated via cookies.
 6. **Immutable Audit Trail**:
    - All security lifecycle events (`LOGIN_SUCCESS`, `LOGIN_FAILED`, `LOGOUT`, `ADMIN_PROVISIONED`) are appended to `audit_logs`.
 
@@ -168,5 +177,7 @@ Detailed architectural and engineering documentation is maintained in the `docs/
 | :---: | :---: | :--- |
 | **Module 0** | **COMPLETED** | Planning, architecture, data modeling, cost guardrails, and repo setup. |
 | **Module 1** | **COMPLETED** | Database schema, SQLite migrations, idempotent seed data, repository layer, health API. |
-| **Module 2** | **COMPLETED** | Administrator provisioning CLI, bcrypt hashing, server-managed sessions, login/logout/me APIs, rate limiting, audit logging (24 tests passed). |
+| **Module 2** | **COMPLETED** | Administrator provisioning CLI, bcrypt hashing, server-managed sessions, login/logout/me APIs, rate limiting, audit logging. |
+| **Module 2.1** | **COMPLETED** | Authentication security hardening: Cookie-only token isolation, zero JSON token leakage, strict CSRF/CORS origin defense, standardized `ADMIN_PASSWORD` provisioning, Secure cookie verification (25 tests passed). |
 | **Module 3** | *Awaiting Authorization* | React SPA frontend setup (Vite), sidebar navigation, dynamic dashboard, and real API integration. |
+
