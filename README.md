@@ -4,9 +4,9 @@
 [![Budget Constraint](https://img.shields.io/badge/Budget-₹0_Strict-green.svg)](#)
 [![Academic Project](https://img.shields.io/badge/Course-Cloud_Computing_Capstone-orange.svg)](#)
 [![Node Version](https://img.shields.io/badge/Node.js-v22.15.1-brightgreen.svg)](#)
-[![Total Tests](https://img.shields.io/badge/Total_Tests-117%20Passed-brightgreen.svg)](#)
-[![Backend Tests](https://img.shields.io/badge/Backend_Tests-85%20Passed-brightgreen.svg)](#)
-[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-32%20Passed-brightgreen.svg)](#)
+[![Total Tests](https://img.shields.io/badge/Total_Tests-151%20Passed-brightgreen.svg)](#)
+[![Backend Tests](https://img.shields.io/badge/Backend_Tests-110%20Passed-brightgreen.svg)](#)
+[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-41%20Passed-brightgreen.svg)](#)
 
 A secure, full-stack enterprise web application designed for small-to-medium organizations and IT administrators to manage the complete lifecycle of physical IT hardware assets and track software license seat allocations, compliance, and upcoming renewal expirations.
 

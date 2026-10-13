@@ -16,6 +16,7 @@ import { healthApi } from '../api/healthApi';
 import { assetApi } from '../api/assetApi';
 import { employeeApi } from '../api/employeeApi';
 import { licenseApi } from '../api/licenseApi';
+import { expiryApi } from '../api/expiryApi';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -32,7 +33,8 @@ export function DashboardPage() {
     totalEmployees: null,
     totalLicenses: null,
     totalPurchasedSeats: null,
-    totalAllocatedSeats: null
+    totalAllocatedSeats: null,
+    nearExpiryLicenses: null
   });
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [metricsError, setMetricsError] = useState(null);
@@ -70,10 +72,11 @@ export function DashboardPage() {
       setMetricsLoading(true);
       setMetricsError(null);
 
-      const [assetRes, empRes, licRes] = await Promise.all([
+      const [assetRes, empRes, licRes, expirySummary] = await Promise.all([
         assetApi.list({ limit: 1000 }),
         employeeApi.list({ limit: 1 }),
-        licenseApi.list({ limit: 1000 })
+        licenseApi.list({ limit: 1000 }),
+        expiryApi.getDashboardSummary().catch(() => null)
       ]);
 
       const allAssets = assetRes.assets || [];
@@ -87,6 +90,8 @@ export function DashboardPage() {
       const totalPurchasedSeats = allLicenses.reduce((sum, l) => sum + (l.total_quantity || 0), 0);
       const totalAllocatedSeats = allLicenses.reduce((sum, l) => sum + (l.used_quantity || 0), 0);
 
+      const nearExpiryLicenses = expirySummary ? expirySummary.licenses.near_expiry_total : 0;
+
       setMetrics({
         totalAssets,
         assignedAssets,
@@ -94,7 +99,8 @@ export function DashboardPage() {
         totalEmployees,
         totalLicenses,
         totalPurchasedSeats,
-        totalAllocatedSeats
+        totalAllocatedSeats,
+        nearExpiryLicenses
       });
     } catch (err) {
       setMetricsError(err.message || 'Unable to retrieve inventory metrics from backend.');
@@ -346,7 +352,7 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Licenses Near Expiry - Staged Pending Module 6 */}
+        {/* Licenses Near Expiry - Live Module 6 */}
         <div className="metric-card">
           <div className="metric-card-top">
             <span className="metric-label">Licenses Near Expiry</span>
@@ -355,12 +361,20 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="metric-value-box">
-            <span className="metric-value-placeholder">--</span>
+            {metricsLoading ? (
+              <span className="metric-value-placeholder">...</span>
+            ) : metricsError ? (
+              <span className="metric-value-placeholder" style={{ color: 'var(--color-danger-text)' }}>Unavailable</span>
+            ) : (
+              <span style={{ fontSize: '1.85rem', fontWeight: 700, color: metrics.nearExpiryLicenses > 0 ? 'var(--color-warning-text)' : 'var(--color-success-text)' }}>
+                {metrics.nearExpiryLicenses}
+              </span>
+            )}
           </div>
           <div>
-            <span className="metric-badge badge-pending">Pending Module 6 API</span>
+            <span className="metric-badge badge-success">Live Module 6 API</span>
             <p style={{ fontSize: '0.78rem', color: 'var(--color-slate-500)', marginTop: '8px' }}>
-              Renewals expiring in 30 days
+              Expired or expiring within 30 days
             </p>
           </div>
         </div>

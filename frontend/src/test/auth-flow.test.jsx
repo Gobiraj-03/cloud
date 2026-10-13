@@ -401,9 +401,9 @@ describe('Frontend Authentication, Navigation & Dashboard Tests', () => {
     expect(screen.getAllByText(/Software Licenses/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Licenses Near Expiry/i)).toBeInTheDocument();
 
-    // Verify pending module badge for Module 6 and live badge for Module 5
+    // Verify live badges for Module 5 and Module 6
     expect(screen.getByText(/Live Module 5 API/i)).toBeInTheDocument();
-    expect(screen.getByText(/Pending Module 6 API/i)).toBeInTheDocument();
+    expect(screen.getByText(/Live Module 6 API/i)).toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------

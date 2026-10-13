@@ -6,6 +6,8 @@ const authRoutes = require('./routes/auth.routes');
 const employeeRoutes = require('./routes/employee.routes');
 const assetRoutes = require('./routes/asset.routes');
 const licenseRoutes = require('./routes/license.routes');
+const expiryRoutes = require('./routes/expiry.routes');
+const reportRoutes = require('./routes/report.routes');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -56,6 +58,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/licenses', licenseRoutes);
+app.use('/api/expiry', expiryRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Catch-all 404 & Centralized Error Handlers
 app.use(notFoundHandler);

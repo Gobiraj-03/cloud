@@ -11,7 +11,7 @@
 | **3** | **React Frontend Foundation & Dashboard** | Vite setup, enterprise layout, cookie auth client, route guards, honest KPI dashboard, placeholder views | **COMPLETED (10/10 Tests Passed)** | **Authorized** |
 | **4** | **IT Asset Management & Employee Assignment** | Asset CRUD, category filters, assignment workflow, return/reassign, history preservation | **COMPLETED (55/55 Backend, 20/20 Frontend Tests Passed)** | **Authorized** |
 | **5** | **Software License Management** | License CRUD, seat allocation, utilized vs total calculation, expiry classification | **COMPLETED (85/85 Backend, 32/32 Frontend Tests Passed)** | **Authorized** |
-| **6** | **Expiry Alerts, Reporting & CSV Export** | 30-day expiry engine, warranty warnings, filtered reporting tables, CSV download, tests | Not Started | Blocked |
+| **6** | **Expiry Alerts, Reporting & CSV Export** | 30-day expiry engine, warranty warnings, 7 filtered compliance reports, CSV download with injection defense | **COMPLETED (110/110 Backend, 41/41 Frontend Tests Passed)** | **Authorized** |
 | **7** | **AWS Cost Verification & Deployment Preparation** | Account eligibility audit, cost verification, build packaging, deployment only on approval | Not Started | **STRICTLY BLOCKED** |
 | **8** | **End-to-End Testing & Viva Presentation** | E2E test suite, architecture diagrams, viva demo script, documentation polish | Not Started | Blocked |
 
@@ -124,14 +124,43 @@
 
 ---
 
-### Modules 6 through 8
+### Module 6: Expiry Alerts, Reporting & CSV Export (Completed)
+- [x] Backend expiry classification service (`expiry.service.js`) evaluating UTC date boundaries without background jobs:
+  - `EXPIRED`: expiry date is strictly earlier than current UTC date
+  - `EXPIRING_7_DAYS`: expiring between today and 7 days inclusive
+  - `EXPIRING_30_DAYS`: expiring between 8 and 30 days inclusive
+  - `VALID`: expiring beyond 30 days
+  - `NO_EXPIRY`: null/empty expiry date (never misclassified as expired)
+- [x] Hardware asset warranty expiry engine (`getWarrantyExpirySummary`) analyzing hardware warranty dates.
+- [x] Backend expiry API endpoints (`/api/expiry/licenses`, `/api/expiry/warranty`, `/api/expiry/dashboard`) with authentication, category filtering, search, and integer days remaining/overdue.
+- [x] Report generation service (`report.service.js`) supporting 7 compliance reports:
+  - `asset_inventory`: complete IT asset inventory
+  - `assigned_assets`: assets currently assigned to employees
+  - `assignment_history`: chronological custody assignment and return history
+  - `license_inventory`: software license inventory with availability
+  - `seat_utilization`: seat capacity and allocation percentages
+  - `expired_licenses`: licenses with past expiration dates
+  - `expiring_licenses`: licenses approaching expiration within 30 days
+- [x] Robust formula injection sanitization (`sanitizeCsvCell`) protecting CSV exports against spreadsheet injection (`=`, `+`, `-`, `@`, `\t`, `\r` prefixed with a single quote).
+- [x] Backend report controller and routes (`/api/reports`, `/api/reports/:type`, `/api/reports/:type/csv`) with proper `Content-Type: text/csv` and sanitized download headers.
+- [x] Frontend API clients: `expiryApi.js` and `reportApi.js` with direct blob download and Content-Disposition filename extraction.
+- [x] Full enterprise Reports screen (`ReportsPage.jsx`) with three interactive tabs:
+  - License Expiry monitoring with interactive summary cards and severity badges
+  - Hardware Warranty monitoring with search and warranty badges
+  - Compliance Reports catalog with preview table and single-click CSV export
+- [x] Live Dashboard integration replacing "Pending Module 6" placeholder with empirical database-backed license near-expiry count.
+- [x] Automated test suites: 25 new backend tests (110/110 passing total) + 9 new frontend tests (41/41 passing total), totaling 151 automated tests passing with zero failures.
+
+---
+
+### Modules 7 through 8
 *(Full criteria detailed in Module 0 baseline — awaiting progressive authorization)*
 
 ---
 
-## 3. Automated Test Execution Log (All 117 Tests Passing)
+## 3. Automated Test Execution Log (All 151 Tests Passing)
 
-### 3.1 Backend Test Suite (85/85 Passed)
+### 3.1 Backend Test Suite (110/110 Passed)
 Executed using Node.js built-in test runner (`node --test tests/**/*.test.js`) in `backend/`:
 
 ```

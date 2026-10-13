@@ -474,8 +474,8 @@ describe('Module 4 — Assets, Employees, Lifecycle & Dashboard Tests', () => {
       expect(screen.getByText('5')).toBeInTheDocument();
     });
 
-    // Check that Software Licenses reflects Live Module 5 and Licenses Near Expiry is pending Module 6
+    // Check that Software Licenses reflects Live Module 5 and Licenses Near Expiry reflects Live Module 6
     expect(screen.getByText('Live Module 5 API')).toBeInTheDocument();
-    expect(screen.getByText('Pending Module 6 API')).toBeInTheDocument();
+    expect(screen.getByText('Live Module 6 API')).toBeInTheDocument();
   });
 });

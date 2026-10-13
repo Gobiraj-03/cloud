@@ -424,8 +424,8 @@ describe('Module 5 — Software License Management & Allocation Lifecycle Tests'
     expect(screen.getByText('45 of 60 seats allocated')).toBeInTheDocument();
   });
 
-  // 12. Honest pending status for Module 6
-  it('12. Expiry metric honestly remains pending until Module 6', async () => {
+  // 12. Live Module 6 expiry metric
+  it('12. Expiry metric displays Live Module 6 API', async () => {
     vi.spyOn(healthApi, 'getHealth').mockResolvedValue({
       healthy: true,
       status: 'UP',
@@ -438,6 +438,6 @@ describe('Module 5 — Software License Management & Allocation Lifecycle Tests'
     renderWithAuth(<DashboardPage />);
 
     expect(await screen.findByText('Licenses Near Expiry')).toBeInTheDocument();
-    expect(screen.getByText('Pending Module 6 API')).toBeInTheDocument();
+    expect(screen.getByText('Live Module 6 API')).toBeInTheDocument();
   });
 });
