@@ -120,6 +120,15 @@ To guarantee database portability (transitioning from SQLite locally to PostgreS
 [ Database Engine (SQLite / PostgreSQL) ]
 ```
 
+### 3.3 Layered Frontend Architecture (`frontend/`)
+Module 3 establishes a clean, decoupled Single Page Application (SPA) using React 19 and Vite:
+
+1. **API Client Layer (`src/api/`)**: Centralized `apiClient` using the native Fetch API. Configured with `credentials: 'include'` for secure `HttpOnly` cookie transfer. Handles network failures, parses standard error responses, and dispatches 401 unauthorized notifications without leaking sensitive tokens in browser code.
+2. **Authentication Context (`src/context/`)**: `AuthContext` verifies session state on application mount by invoking `GET /api/auth/me`. Retains user profile metadata in memory without local/session storage persistence, strictly respecting server-side session truth.
+3. **Protected Route Guards (`src/routes/`)**: `ProtectedRoute` checks authentication status, displays a fullscreen loading state during session resolution, and safely redirects unauthenticated visitors to `/login` preserving intended destination URLs.
+4. **Enterprise Layout (`src/layouts/`)**: `MainLayout` provides an accessible, responsive sidebar navigation (deep slate `#0f172a`), active link indication, live backend health monitoring (`/api/health`), and an authenticated administrator greeting banner.
+5. **Honest Staged Views (`src/pages/`)**: Dashboard renders real system health metrics alongside honest "Pending Module" states for unstaged business entities, rejecting fabricated or mock charts until backend CRUD endpoints are authorized.
+
 ---
 
 ## 4. Stage B: Provisional AWS Cloud Architecture

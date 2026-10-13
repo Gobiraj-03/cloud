@@ -4,7 +4,9 @@
 [![Budget Constraint](https://img.shields.io/badge/Budget-₹0_Strict-green.svg)](#)
 [![Academic Project](https://img.shields.io/badge/Course-Cloud_Computing_Capstone-orange.svg)](#)
 [![Node Version](https://img.shields.io/badge/Node.js-v22.15.1-brightgreen.svg)](#)
+[![Total Tests](https://img.shields.io/badge/Total_Tests-35%20Passed-brightgreen.svg)](#)
 [![Backend Tests](https://img.shields.io/badge/Backend_Tests-25%20Passed-brightgreen.svg)](#)
+[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-10%20Passed-brightgreen.svg)](#)
 
 A secure, full-stack enterprise web application designed for small-to-medium organizations and IT administrators to manage the complete lifecycle of physical IT hardware assets and track software license seat allocations, compliance, and upcoming renewal expirations.
 
@@ -55,41 +57,46 @@ This system provides a centralized, auditable, and responsive web platform that 
 - **Node.js** v22.15.1+ and **npm** 10.9.2+ installed.
 - **Windows PowerShell** terminal.
 
-### 3.2 Backend Setup & Execution Commands
+### 3.2 Root-Level Unified Commands (Recommended)
 
-Open Windows PowerShell in the project root (`d:\cloud`):
+From the project root (`d:\cloud`):
 
 ```powershell
-# 1. Navigate to the backend directory
-cd d:\cloud\backend
-
-# 2. Install dependencies (if not already installed)
-npm install
-
-# 3. Initialize SQLite database schema (8 tables and indexes)
-npm run db:migrate
-
-# 4. Seed realistic demonstration data (Preserves existing administrators)
-npm run db:seed
-# Or run migration and seed together:
-npm run db:setup
-
-# 5. Provision your local administrator account securely:
-# Option A: Interactive prompt (masks password input)
-npm run admin:create
-
-# Option B: Non-interactive via environment variables (clean for automation)
-$env:ADMIN_USERNAME="admin"; $env:ADMIN_EMAIL="admin@enterprise.local"; $env:ADMIN_PASSWORD="SecurePassword123!"; npm run admin:create
-
-# 6. Execute automated test suite (25 unit, security, and integration tests)
+# 1. Run complete automated test suite (35 backend & frontend tests)
 npm test
 
-# 7. Start the Express backend server
-npm run dev
-# (or: npm start)
+# 2. Start the Express backend server (Port 5000)
+npm run backend:dev
+
+# 3. In a second terminal, start the React Vite frontend (Port 5173)
+npm run frontend:dev
+
+# 4. Build frontend production bundle
+npm run frontend:build
 ```
 
-The backend server listens on `http://localhost:5000`.
+### 3.3 Individual Service Execution
+
+#### Backend Server (`http://localhost:5000`)
+```powershell
+cd d:\cloud\backend
+npm install
+npm run db:setup
+npm run admin:create  # Provision local administrator
+npm test              # 25 backend tests
+npm run dev           # Start Express on http://localhost:5000
+```
+
+#### Frontend Application (`http://localhost:5173`)
+```powershell
+cd d:\cloud\frontend
+npm install
+npm test              # 10 frontend tests
+npm run dev           # Start Vite dev server on http://localhost:5173
+npm run build         # Production bundle in frontend/dist/
+```
+
+The frontend development server runs on **`http://localhost:5173`** and proxies all `/api/*` requests directly to the backend at **`http://localhost:5000`** with `credentials: 'include'`.
 
 ### 3.3 Verify Authentication & Health via HTTP
 
@@ -179,5 +186,6 @@ Detailed architectural and engineering documentation is maintained in the `docs/
 | **Module 1** | **COMPLETED** | Database schema, SQLite migrations, idempotent seed data, repository layer, health API. |
 | **Module 2** | **COMPLETED** | Administrator provisioning CLI, bcrypt hashing, server-managed sessions, login/logout/me APIs, rate limiting, audit logging. |
 | **Module 2.1** | **COMPLETED** | Authentication security hardening: Cookie-only token isolation, zero JSON token leakage, strict CSRF/CORS origin defense, standardized `ADMIN_PASSWORD` provisioning, Secure cookie verification (25 tests passed). |
-| **Module 3** | *Awaiting Authorization* | React SPA frontend setup (Vite), sidebar navigation, dynamic dashboard, and real API integration. |
+| **Module 3** | **COMPLETED** | React SPA frontend foundation (Vite), enterprise design system, cookie authentication integration, protected routes, responsive navigation, honest dashboard metrics, and placeholders (10 tests passed; 35 total tests). |
+| **Module 4** | *Awaiting Authorization* | Hardware asset CRUD, category filters, employee assignment state machine, and custody history. |
 
