@@ -9,7 +9,7 @@ const { seed } = require('../src/db/seed');
 const TEST_DB_PATH = path.resolve(__dirname, '../../data/test_database.db');
 
 test.before(async () => {
-  // Ensure any previous test database file is removed
+  process.env.DB_PATH = TEST_DB_PATH;
   await db.close();
   if (fs.existsSync(TEST_DB_PATH)) {
     fs.unlinkSync(TEST_DB_PATH);
@@ -33,7 +33,7 @@ test('1. Database initialization succeeds', async () => {
   assert.ok(fs.existsSync(TEST_DB_PATH), 'Test database file must exist on disk');
 });
 
-test('2. All seven required tables exist in database', async () => {
+test('2. All required tables exist in database (7 domain tables + sessions table)', async () => {
   const tables = await db.query(
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name;"
   );
@@ -45,7 +45,7 @@ test('2. All seven required tables exist in database', async () => {
       `Required table '${expectedTable}' must exist in sqlite_master`
     );
   }
-  assert.strictEqual(REQUIRED_TABLES.length, 7, 'Must have exactly 7 domain tables defined');
+  assert.strictEqual(REQUIRED_TABLES.length, 8, 'Must have 8 tables defined (7 domain + sessions)');
 });
 
 test('3. Foreign key enforcement is enabled on connection', async () => {

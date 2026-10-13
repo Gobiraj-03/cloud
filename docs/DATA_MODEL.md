@@ -220,6 +220,22 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 ---
 
+### 3.8 `sessions`
+Server-managed session store for active administrator authentication sessions.
+```sql
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    admin_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    ip_address TEXT NULL,
+    user_agent TEXT NULL,
+    FOREIGN KEY (admin_id) REFERENCES administrators(id) ON DELETE CASCADE
+);
+```
+
+---
+
 ## 4. Query Optimization Indexes
 
 ```sql
@@ -234,6 +250,8 @@ CREATE INDEX IF NOT EXISTS idx_licenses_code ON software_licenses(license_code);
 CREATE INDEX IF NOT EXISTS idx_allocations_license ON license_allocations(license_id);
 CREATE INDEX IF NOT EXISTS idx_allocations_employee ON license_allocations(employee_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_sessions_admin ON sessions(admin_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 ```
 
 ---

@@ -9,7 +9,8 @@ const REQUIRED_TABLES = [
   'asset_assignment_history',
   'software_licenses',
   'license_allocations',
-  'audit_logs'
+  'audit_logs',
+  'sessions'
 ];
 
 /**

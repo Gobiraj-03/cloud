@@ -11,6 +11,7 @@ const healthRepository = require('../src/repositories/health.repository');
 const TEST_DB_PATH = path.resolve(__dirname, '../../data/test_health_db.db');
 
 test.before(async () => {
+  process.env.DB_PATH = TEST_DB_PATH;
   await db.close();
   if (fs.existsSync(TEST_DB_PATH)) {
     fs.unlinkSync(TEST_DB_PATH);
@@ -43,7 +44,7 @@ test('9. GET /api/health returns 200 OK and expected JSON when healthy', async (
   assert.ok(body.database, 'Database details object must be present');
   assert.strictEqual(body.database.status, 'CONNECTED', 'Database status must be CONNECTED');
   assert.strictEqual(body.database.engine, 'SQLite 3', 'Engine must report SQLite 3');
-  assert.strictEqual(body.database.tablesFound, 7, 'Must report all 7 tables found');
+  assert.strictEqual(body.database.tablesFound, 8, 'Must report all 8 tables found');
 });
 
 test('10. GET /api/health returns 503 Service Unavailable when database fails', async () => {

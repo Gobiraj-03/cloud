@@ -14,19 +14,29 @@ async function seed(customDbPath = null) {
 
   return await db.transaction(async ({ query, get, run }) => {
     // -------------------------------------------------------------------------
-    // 1. Seed Administrators (Non-plaintext dummy bcrypt hash for Module 1)
+    // 1. Seed Administrators (Safe Provisioning Check - Never Overwrites Existing)
     // -------------------------------------------------------------------------
-    await run(
-      `INSERT OR IGNORE INTO administrators (id, username, email, password_hash, full_name, role)
-       VALUES (1, ?, ?, ?, ?, ?)`,
-      [
-        'itadmin',
-        'itadmin@enterprise.local',
-        '$2b$10$wK1GvXf5yN6uQ8k0jZ7m9.eD1rP2sT3uV4wX5yZ6aB7cD8eF9gH0i', // placeholder bcrypt hash
-        'Enterprise IT Administrator',
-        'SUPERADMIN'
-      ]
-    );
+    const existingAdmin = await get('SELECT id FROM administrators LIMIT 1');
+    let adminId = existingAdmin ? existingAdmin.id : null;
+
+    if (!existingAdmin) {
+      const initialPassword = process.env.ADMIN_INITIAL_PASSWORD || process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'test' ? 'TestAdminPass123!' : null);
+      if (initialPassword) {
+        const bcrypt = require('bcryptjs');
+        const hash = await bcrypt.hash(initialPassword, 10);
+        const result = await run(
+          `INSERT INTO administrators (id, username, email, password_hash, full_name, role)
+           VALUES (1, ?, ?, ?, ?, 'SUPERADMIN')`,
+          [
+            process.env.ADMIN_USERNAME || 'itadmin',
+            process.env.ADMIN_EMAIL || 'itadmin@enterprise.local',
+            hash,
+            process.env.ADMIN_NAME || 'Enterprise IT Administrator'
+          ]
+        );
+        adminId = result.lastID;
+      }
+    }
 
     // -------------------------------------------------------------------------
     // 2. Seed Employees
@@ -155,12 +165,12 @@ async function seed(customDbPath = null) {
     // 4. Seed Asset Assignment History (Preserves Past & Current Custody)
     // -------------------------------------------------------------------------
     const historyEntries = [
-      { id: 1, assetId: 1, empId: 1, action: 'ASSIGNED', date: '2025-01-15 10:00:00', adminId: 1, notes: 'Initial workstation provisioning for new joiner' },
-      { id: 2, assetId: 2, empId: 2, action: 'ASSIGNED', date: '2025-02-10 11:30:00', adminId: 1, notes: 'Design laptop allocation' },
-      { id: 3, assetId: 5, empId: null, action: 'SENT_TO_MAINTENANCE', date: '2026-09-01 14:00:00', adminId: 1, notes: 'Paper jam and roller wear reported' },
-      { id: 4, assetId: 6, empId: 4, action: 'ASSIGNED', date: '2020-05-15 09:00:00', adminId: 1, notes: 'Original deployment to Finance team' },
-      { id: 5, assetId: 6, empId: 4, action: 'RETURNED', date: '2023-05-01 16:00:00', adminId: 1, notes: 'Hardware upgrade return' },
-      { id: 6, assetId: 6, empId: null, action: 'RETIRED', date: '2023-05-10 12:00:00', adminId: 1, notes: 'Decommission approved after 3-year refresh' }
+      { id: 1, assetId: 1, empId: 1, action: 'ASSIGNED', date: '2025-01-15 10:00:00', adminId: adminId || null, notes: 'Initial workstation provisioning for new joiner' },
+      { id: 2, assetId: 2, empId: 2, action: 'ASSIGNED', date: '2025-02-10 11:30:00', adminId: adminId || null, notes: 'Design laptop allocation' },
+      { id: 3, assetId: 5, empId: null, action: 'SENT_TO_MAINTENANCE', date: '2026-09-01 14:00:00', adminId: adminId || null, notes: 'Paper jam and roller wear reported' },
+      { id: 4, assetId: 6, empId: 4, action: 'ASSIGNED', date: '2020-05-15 09:00:00', adminId: adminId || null, notes: 'Original deployment to Finance team' },
+      { id: 5, assetId: 6, empId: 4, action: 'RETURNED', date: '2023-05-01 16:00:00', adminId: adminId || null, notes: 'Hardware upgrade return' },
+      { id: 6, assetId: 6, empId: null, action: 'RETIRED', date: '2023-05-10 12:00:00', adminId: adminId || null, notes: 'Decommission approved after 3-year refresh' }
     ];
 
     for (const h of historyEntries) {
@@ -271,9 +281,9 @@ async function seed(customDbPath = null) {
     // 7. Seed Audit Logs (System Baseline Activity)
     // -------------------------------------------------------------------------
     const logs = [
-      { id: 1, adminId: 1, action: 'SYSTEM_INITIALIZED', type: 'SYSTEM', entityId: null, details: JSON.stringify({ event: 'Initial database schema and seed applied', version: '1.0.0' }) },
-      { id: 2, adminId: 1, action: 'ASSET_PROVISIONED', type: 'ASSET', entityId: 1, details: JSON.stringify({ assetTag: 'AST-2026-0001', assignee: 'EMP-1001' }) },
-      { id: 3, adminId: 1, action: 'LICENSE_ALLOCATED', type: 'LICENSE', entityId: 1, details: JSON.stringify({ licenseCode: 'LIC-MS-M365-E5', employeeCode: 'EMP-1001' }) }
+      { id: 1, adminId: adminId || null, action: 'SYSTEM_INITIALIZED', type: 'SYSTEM', entityId: null, details: JSON.stringify({ event: 'Initial database schema and seed applied', version: '1.0.0' }) },
+      { id: 2, adminId: adminId || null, action: 'ASSET_PROVISIONED', type: 'ASSET', entityId: 1, details: JSON.stringify({ assetTag: 'AST-2026-0001', assignee: 'EMP-1001' }) },
+      { id: 3, adminId: adminId || null, action: 'LICENSE_ALLOCATED', type: 'LICENSE', entityId: 1, details: JSON.stringify({ licenseCode: 'LIC-MS-M365-E5', employeeCode: 'EMP-1001' }) }
     ];
 
     for (const l of logs) {

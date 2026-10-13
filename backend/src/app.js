@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const healthRoutes = require('./routes/health.routes');
+const authRoutes = require('./routes/auth.routes');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -12,6 +14,7 @@ app.use(cors({
   credentials: true
 }));
 
+app.use(cookieParser());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
@@ -29,6 +32,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 // API Routes
 app.use('/api/health', healthRoutes);
+app.use('/api/auth', authRoutes);
 
 // Catch-all 404 & Centralized Error Handlers
 app.use(notFoundHandler);
