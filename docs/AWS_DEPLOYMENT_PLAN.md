@@ -1,325 +1,270 @@
-# AssetFlow — AWS Cloud Deployment Architecture & Implementation Plan
+# AssetFlow — Low-Cost Cloud Deployment Architecture & Implementation Plan
 
-**Project:** AssetFlow — IT Asset & Software License Management System  
+**Target Architecture:**
+- **Frontend:** Vercel (React 19 + Vite SPA) — *Perpetual $0 Hobby Tier*
+- **Backend:** AWS App Runner (Node.js + Express Container) — *Credit-Protected Compute*
+- **Database:** Amazon RDS PostgreSQL (`db.t4g.micro` Single-AZ) — *Managed Persistence*
+- **Storage:** Amazon S3 (Private Attachments & Uploads) — *Free Tier Standard Storage*
+- **Configuration & Secrets:** AWS Systems Manager (SSM) Parameter Store — *Standard Tier ($0.00)*
+
 **Workspace:** `D:\cloud`  
-**Current Operating State:** Stage A — Localhost Development (100% Verified, ₹0 Spent)  
-**Target Operating State:** Stage B — AWS Cloud Deployment (Audited & Planned, Unprovisioned)  
+**Current Local State:** Stage A (Verified 100% Localhost with SQLite, 151/151 tests passing, ₹0 spent)  
+**Target Cloud State:** Stage B (Audited & Planned, Unprovisioned)  
 **Budget Constraint:** **Strict ₹0 Out of Pocket** ($100 AWS Credits Available, 183 Days Remaining)  
-**Document Classification:** Architecture Assessment, Security Blueprint, and Deployment Roadmap (Audit & Plan Only)
+**Classification:** Low-Cost Cloud Implementation Blueprint & Demo-Only Governance Guide  
 
 ---
 
-## 1. Executive Summary & Cloud Readiness Audit
+## 1. Executive Summary & Architecture Blueprint
 
-A comprehensive inspection of the existing AssetFlow codebase ([README.md](file:///D:/cloud/README.md), [backend/src/](file:///D:/cloud/backend/src/), [frontend/src/](file:///D:/cloud/frontend/src/), [backend/src/db/schema.sql](file:///D:/cloud/backend/src/db/schema.sql)) confirms the following technical baseline:
+To achieve enterprise-grade cloud deployment while safeguarding your **$100 AWS credit pool** and ensuring **zero out-of-pocket spending**, the system splits workloads between Vercel and AWS:
 
-| Dimension | Current Local Status | Cloud Deployment Readiness | Gap / Work Required for Cloud |
-| :--- | :--- | :--- | :--- |
-| **Test Suite** | 151 / 151 tests passed (110 backend, 41 frontend) | **Ready** | Automated tests validate core business invariants. |
-| **Frontend Build** | Vite production bundle builds cleanly (328 kB JS) | **Ready** | Static assets in `frontend/dist/` ready for S3/Amplify upload. |
-| **Authentication** | HttpOnly cookies, session table, bcryptjs | **Conditionally Ready** | Requires `secure: true` and single-origin or CORS/SameSite tuning. |
-| **Application Layer** | Express REST API with input validation & rate limiting | **Ready** | Stateless controllers, easily containerizable for App Runner / ECS. |
-| **Database Layer** | SQLite 3 embedded file (`data/asset_management.db`) | **NOT READY FOR CLOUD** | SQLite cannot run on stateless multi-instance cloud containers. |
-| **Secrets & Config** | Local `.env` file | **Partially Ready** | Must migrate from `.env` to AWS Systems Manager (SSM) Parameter Store. |
-| **Cost Safeguards** | ₹0.00 spent locally | **Pending Configuration** | AWS Budgets ($0.01 threshold) must be active before provisioning. |
-
----
-
-## 2. Comparative AWS Options Matrix
-
-### 2.1 Frontend Hosting Comparison
-
-| Feature / Metric | Option A: AWS Amplify Hosting | Option B: Amazon S3 + CloudFront CDN (Recommended) |
-| :--- | :--- | :--- |
-| **Architecture** | Managed Git CI/CD service building React on push | Pre-built static bundle in private S3 bucket distributed via CloudFront edge locations |
-| **Free Tier Allowance** | 1,000 build mins/month, 5 GB storage, 15 GB served/month (12-month limit) | CloudFront: **1 TB transfer out permanently free**; S3: 5 GB storage (12 months) |
-| **Domain & SSL** | Free `*.amplifyapp.com` subdomain with automated SSL | Free `*.cloudfront.net` domain with free ACM SSL certificate |
-| **Cookie / CORS Integration** | Separate domain from API $\rightarrow$ requires `SameSite=None; Secure` (cross-site cookie caveats) | **Unified Origin:** CloudFront can route `/*` to S3 and `/api/*` to App Runner on the **exact same domain** |
-| **Credit Consumption Risk** | Build minutes can exceed limits if multiple pushes occur; post-12-month pricing applies | Extremely low cost (~$0.10 - $0.50/month), highly predictable, minimal credit drain |
-| **Recommendation** | Good for automated CI/CD if Git connected | **RECOMMENDED:** S3 + CloudFront provides true single-origin routing for cookies and $0 permanent CDN tier |
-
----
-
-### 2.2 Backend Compute Comparison
-
-| Feature / Metric | Option A: AWS App Runner (Recommended) | Option B: AWS ECS Fargate | Option C: AWS Lambda (Serverless) | Option D: Amazon EC2 (`t3.micro`) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Compute Model** | Fully managed container service | Container orchestration in custom VPC | Event-driven serverless functions | Self-managed virtual machine |
-| **Setup Complexity** | Very Low: Points directly to container image | Moderate: Requires VPC, Subnets, Task Defs, ALB | Moderate: Requires serverless adapter wrapper | High: Manual OS setup, PM2, Nginx, certbot |
-| **Load Balancing & SSL** | Built-in free HTTPS endpoint | Requires Application Load Balancer (**$16–$22/month flat!**) | Built-in via API Gateway ($1/million calls) | Manual Nginx reverse proxy + Certbot |
-| **Idle Cost Behavior** | $0.007/GB-hr provisioned memory (~$10/mo 24/7) unless paused | Tasks run continuously; ALB incurs flat monthly charges | **Scales to true zero ($0.00 when idle)** | Free Tier (750 hrs/mo 1st year); new IPv4 fee ($3.60/mo) |
-| **Credit Impact** | Low to moderate: Absorbed by $100 credits if paused when idle | **HIGH:** ALB alone consumes $20+/mo; drains credits fast | Lowest: 1M requests/mo permanently free | Low, but IPv4 fee applies and manual maintenance required |
-| **Recommendation** | **RECOMMENDED for Demo:** Simple, reliable, zero ALB cost; pause service between grading sessions | Avoid for capstone due to mandatory ALB cost trap | Excellent long-term alternative if adapting Express app | Viable only if experienced with Linux VM administration |
-
----
-
-### 2.3 Database Persistence Comparison
-
-| Feature / Metric | Option A: SQLite on Local Container | Option B: SQLite on AWS EFS (NFS) | Option C: Amazon RDS PostgreSQL (Recommended) | Option D: External Serverless Postgres (Neon / Supabase) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Persistence** | **NONE:** Data destroyed on restart/redeploy | Persistent network filesystem | Persistent managed database volume (gp3 SSD) | Cloud persistent managed instance |
-| **Multi-Instance Safety** | Split-brain corruption | Latency spikes & `SQLITE_BUSY` deadlocks | Fully ACID compliant, connection pooled | Fully ACID compliant, serverless scaling |
-| **Free Tier Allowance** | $0 | 5 GB EFS free (12 months) | **750 hours/month Single-AZ `db.t4g.micro` + 20 GB SSD** | Permanent free tier (e.g. Neon 0.5 GB, 0 credit card) |
-| **Migration Required** | None | None | SQL dialect adaptation (`pg` pool, `SERIAL`, `$1`) | SQL dialect adaptation (`pg` pool, `SERIAL`, `$1`) |
-| **Credit Consumption** | $0 | $0.30/GB-month over 5 GB | 100% Free under 12-Month Free Tier; or ~$15/mo from credits | **$0.00 out of pocket, $0 credits consumed** |
-| **Recommendation** | **FORBIDDEN IN CLOUD** | **NOT RECOMMENDED** (locking risks) | **RECOMMENDED FOR AWS:** Enterprise standard, covered by Free Tier / credits | **RECOMMENDED ZERO-RISK ALTERNATIVE:** 100% preserves AWS credits |
-
----
-
-## 3. The SQLite Persistence Problem & PostgreSQL Transition Blueprint
-
-### 3.1 Why SQLite Fails on Modern Cloud Containers
-
-In local development, AssetFlow uses SQLite 3 ([backend/src/config/database.js](file:///D:/cloud/backend/src/config/database.js)), which writes to `data/asset_management.db`. While ideal for local execution, SQLite cannot be used in production cloud container environments:
-
-```
-[Incoming Admin Request]
-          │
-          ▼
-┌────────────────────────────────────────────────────────┐
-│ Cloud Container Orchestrator (AWS App Runner / ECS)     │
-│                                                        │
-│  ┌───────────────────────┐   ┌───────────────────────┐ │
-│  │ Container Instance 1  │   │ Container Instance 2  │ │
-│  │ [Ephemeral Disk]      │   │ [Ephemeral Disk]      │ │
-│  │ asset_management.db   │   │ asset_management.db   │ │
-│  └───────────────────────┘   └───────────────────────┘ │
-└────────────────────────────────────────────────────────┘
-          ▲                               ▲
-          │                               │
-[Writes Asset "AST-001" to DB 1]    [Reads DB 2: "AST-001" NOT FOUND!]
-                   (SPLIT-BRAIN DESYNCHRONIZATION)
-```
-
-1. **Stateless Ephemerality:** Cloud containers have temporary local storage. When a container restarts, crashes, auto-scales down, or updates, the disk is wiped and rebuilt from the container image. All newly registered assets, employees, and licenses are lost.
-2. **Multi-Instance Split-Brain:** When traffic causes horizontal scaling, each container instance maintains its own separate copy of SQLite. An administrator assigning a laptop on Instance 1 will not see the assignment reflected on Instance 2.
-3. **NFS/EFS Locking Failures:** Mounting AWS EFS over network storage is explicitly discouraged by SQLite's maintainers. NFS client caching and file-locking latency cause `SQLITE_BUSY` transaction timeouts and catalog corruption under concurrent traffic.
-
-### 3.2 Code Migration Blueprint: SQLite to PostgreSQL
-
-Because AssetFlow isolates database operations in [backend/src/repositories/](file:///D:/cloud/backend/src/repositories/), switching to PostgreSQL requires modifying only the database adapter and query placeholders without rewriting business services or React components:
-
-#### 1. Database Driver Swap:
-- In `backend/package.json`: Add `"pg": "^8.13.0"` and `"pg-pool": "^3.7.0"`.
-- Replace SQLite callback wrapper in [backend/src/config/database.js](file:///D:/cloud/backend/src/config/database.js) with a PostgreSQL connection pool:
-
-```javascript
-// Proposed backend/src/config/postgres.js
-const { Pool } = require('pg');
-
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME || 'assetflow',
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
-
-module.exports = {
-  query: (text, params) => pool.query(text, params),
-  getClient: () => pool.connect(),
-};
-```
-
-#### 2. SQL Dialect Conversions:
-| SQLite Syntax (Current) | PostgreSQL Syntax (Target) | File Affected |
-| :--- | :--- | :--- |
-| `INTEGER PRIMARY KEY AUTOINCREMENT` | `SERIAL PRIMARY KEY` or `INT GENERATED ALWAYS AS IDENTITY` | [backend/src/db/schema.sql](file:///D:/cloud/backend/src/db/schema.sql) |
-| `DATETIME('now')` / `TEXT` timestamps | `TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP` | [backend/src/db/schema.sql](file:///D:/cloud/backend/src/db/schema.sql) |
-| Positional parameter `?` (`WHERE id = ?`) | Indexed parameter `$1` (`WHERE id = $1`) | All files in [backend/src/repositories/](file:///D:/cloud/backend/src/repositories/) |
-| `this.lastID` (SQLite `run` callback) | `INSERT INTO ... RETURNING id;` | [backend/src/repositories/](file:///D:/cloud/backend/src/repositories/) |
-| String concat `||` | String concat `||` (Compatible in both) | [backend/src/repositories/asset.repository.js](file:///D:/cloud/backend/src/repositories/asset.repository.js) |
-
----
-
-## 4. Safest Recommended Architecture
-
-To maintain strict compliance with the **₹0 out-of-pocket budget** and protect the $100 credit pool over the full 183-day timeline, the following architecture is recommended:
+1. **Vercel hosts the React frontend for $0.00 permanently**, offloading all global CDN, static build minutes, and edge traffic completely away from your AWS credits.
+2. **AWS App Runner hosts the containerized Node.js/Express backend**, running on the smallest available configuration (**1 vCPU / 2 GB RAM**) with auto-scaling capped at **1 instance**.
+3. **Amazon RDS PostgreSQL (`db.t4g.micro`) provides persistent relational storage**, replacing ephemeral container files with ACID transactions.
+4. **Amazon S3 stores small file attachments** in a secure private bucket with pre-signed URLs.
+5. **AWS SSM Parameter Store (Standard Tier)** provides zero-cost secrets management, avoiding paid Secrets Manager fees.
 
 ```mermaid
 graph TB
-    subgraph Users ["Client Layer"]
-        AdminBrowser["IT Administrator Browser\n(Modern Web Browser)"]
+    subgraph PublicClients ["End Users & Administrators"]
+        Browser["Administrator Browser\n(HTTPS)"]
     end
 
-    subgraph AWSCloudFront ["Edge & Security Layer (Global)"]
-        CF["Amazon CloudFront CDN\n(Single-Origin Routing)\nSSL/TLS 1.3 via ACM Certificate"]
+    subgraph VercelEdge ["Vercel Global Edge Network ($0.00)"]
+        VercelCDN["Vercel Edge CDN\n(Automatic SSL / Free Custom Domain)\nhttps://assetflow.vercel.app"]
+        VercelStatic["React 19 + Vite SPA\n(Compiled HTML, JS, CSS)"]
+        VercelCDN --> VercelStatic
     end
 
-    subgraph FrontendHosting ["Static Presentation Tier ($0)"]
-        S3Static["Amazon S3 Bucket (Private)\n(React 19 + Vite Static Build)\nOrigin Access Control (OAC)"]
+    subgraph AWSCloud ["Amazon Web Services (AWS) — Credit Pool ($100)"]
+        
+        subgraph ComputeLayer ["Containerized Backend (Demo-On-Demand)"]
+            AppRunner["AWS App Runner Service\nExpress.js API Container (Node.js 20)\n1 vCPU / 2 GB RAM (Min: 1, Max: 1)\nManual Pause Enabled ($0 when idle)"]
+            SSM["AWS SSM Parameter Store\n(Standard Tier — $0.00)\nEncrypted DB Credentials & Session Key"]
+            SSM --> AppRunner
+        end
+
+        subgraph StorageLayer ["Object Storage ($0.00 Free Tier)"]
+            S3["Amazon S3 Bucket (Private)\nAsset Attachments & Photos (< 100 MB)\nBlock Public Access: ENABLED\nPre-Signed Upload/Download URLs"]
+            AppRunner -->|"Pre-Signed URLs / IAM"| S3
+        end
+
+        subgraph DatabaseLayer ["Managed Database Tier (Private VPC)"]
+            RDS["Amazon RDS PostgreSQL\nSingle-AZ db.t4g.micro (ARM Graviton2)\n20 GB General Purpose gp3 SSD\nAutomated Backups: 1-Day Retention"]
+            AppRunner -->|"Port 5432 (SSL Encrypted)"| RDS
+        end
+
+        subgraph Guardrails ["Cost & Security Guardrails ($0.00)"]
+            BudgetAlarm["AWS Budgets $0.01 Alert\nInstant Email Notification"]
+            CreditAlarm["AWS Budgets $20 / $50 / $80 Alert\nCredit Burn Monitor"]
+            CWLogs["CloudWatch Logs\n(7-Day Retention Limit)"]
+            AppRunner --> CWLogs
+            RDS --> CWLogs
+        end
     end
 
-    subgraph BackendHosting ["Container Compute Tier (Credit-Protected)"]
-        AppRunner["AWS App Runner\n(Node.js / Express API Container)\n1 vCPU / 2 GB RAM\nManual Pause Protocol"]
-        SSM["AWS SSM Parameter Store\n(Standard Tier — $0.00)\nEncrypted DB Secrets & Session Keys"]
-        SSM --> AppRunner
-    end
-
-    subgraph DatabaseTier ["Persistence Tier (Free Tier Eligible)"]
-        RDS["Amazon RDS PostgreSQL\nSingle-AZ db.t4g.micro (ARM Graviton)\n20 GB General Purpose gp3 SSD\nAutomated Backups (1-Day Retention)"]
-        AppRunner -->|"Port 5432 (SSL Encrypted)"| RDS
-    end
-
-    subgraph ObservabilityTier ["Guardrail & Alerting Tier ($0.00)"]
-        BudgetAlarm["AWS Budgets $0.01 Alert\nEmergency SNS Notification"]
-        CreditAlarm["AWS Budgets $20 / $50 / $80 Alert\nCredit Burn Warning"]
-        CWLogs["CloudWatch Logs\n(7-Day Retention Limit)"]
-        AppRunner --> CWLogs
-        RDS --> CWLogs
-    end
-
-    AdminBrowser -->|"HTTPS (Port 443)"| CF
-    CF -->|"Path: /* (Static HTML/JS/CSS)"| S3Static
-    CF -->|"Path: /api/* (API Requests & Cookies)"| AppRunner
+    Browser -->|"1. Load Web App (HTTPS)"| VercelCDN
+    Browser -->|"2. API Calls & Session Cookie (CORS / Credentials)"| AppRunner
 ```
 
 ---
 
-## 5. Security & Configuration Blueprint
+## 2. Minimal Suitable Configurations & AWS Credit Optimization
 
-### 5.1 Single-Origin Cookie & CORS Architecture (CWE-1275 / CSRF Defense)
+To guarantee that your $100 credits last the full **183 days** without incurring a single rupee of expense, every component is provisioned at the absolute minimal tier:
 
-A major pitfall in cloud deployments is hosting frontend on `https://d123.amplifyapp.com` and backend on `https://xyz.awsapprunner.com`. Browsers treat these as **cross-site origins**, requiring:
-1. `SameSite=None; Secure` cookies, which modern browsers (Safari ITP, Chrome Privacy Sandbox) increasingly drop or block as third-party tracking cookies.
-2. Complex CORS pre-flight `OPTIONS` requests on every API call.
+| Service | Configuration Specification | Free Tier / Pricing Policy | Monthly Cost (Demo Mode) |
+| :--- | :--- | :--- | :---: |
+| **Vercel** (Frontend) | Hobby Tier, Framework: Vite, Output: `dist` | 100% Free Forever (100 GB bandwidth, unlimited builds) | **$0.00** |
+| **AWS App Runner** (Backend) | **1 vCPU / 2 GB RAM**, Min Instances: 1, Max Instances: 1 | $0.007/GB-hr idle memory ($0.014/hr when unpaused) | **~$0.15 - $0.50** *(Paused when not demoing)* |
+| **Amazon RDS** (Database) | **`db.t4g.micro`** (Single-AZ), PostgreSQL 16, **20 GB gp3** | Free Tier eligible (750 hrs/mo 1st year) or ~$13/mo from credits | **$0.00** *(Under Free Tier)* or **~$2.30** *(if stopped)* |
+| **Amazon S3** (Storage) | 1 Private Bucket, Standard Storage (<100 MB) | 5 GB Standard storage free for 12 months | **<$0.01** |
+| **AWS SSM** (Secrets) | **Standard Parameter Store** (KMS default key) | 10,000 standard parameters permanently free | **$0.00** |
+| **AWS CloudWatch** (Logs) | Log retention set strictly to **7 Days** | 5 GB log ingestion permanently free | **$0.00** |
+| **AWS Budgets** (Alarms) | 2 Active Budgets ($0.01 and Credit Exhaustion) | First 2 action-enabled budgets are 100% free | **$0.00** |
 
-#### The Single-Origin CloudFront Solution:
-By placing Amazon CloudFront in front of both tiers:
-- `https://assetflow.yourdomain.com/*` $\rightarrow$ Routes to S3 (Static React SPA).
-- `https://assetflow.yourdomain.com/api/*` $\rightarrow$ Routes to App Runner (Express REST API).
+---
 
-**Security Advantages:**
-- **First-Party Cookies:** Cookies are transmitted on the exact same domain origin.
-- **Cookie Settings:** `httpOnly: true`, `secure: true`, `sameSite: 'lax'`, `path: '/'`.
-- **Zero CORS Preflight:** Browser considers frontend and backend identical origins, eliminating preflight latency and CORS misconfiguration risks.
-- **CSRF Defense:** [backend/src/middleware/authMiddleware.js](file:///D:/cloud/backend/src/middleware/authMiddleware.js) validates that state-changing requests originate from the expected domain.
+## 3. Demo-Only Usage: How to Stop & Resume Resources
 
-### 5.2 Environment Secrets Management (AWS SSM Parameter Store)
+The secret to preserving your $100 credits is **Demo-on-Demand Execution**. Never leave container instances running 24/7 between presentation sessions.
 
-> [!IMPORTANT]
-> **Use AWS Systems Manager (SSM) Parameter Store (Standard Tier), NOT AWS Secrets Manager.**  
-> AWS Secrets Manager costs **$0.40 per secret per month**. Storing 5 secrets costs $2.00/month continuously.  
-> In contrast, **AWS SSM Parameter Store Standard Tier is 100% free ($0.00/month)**.
+### 3.1 App Runner: Pausing and Resuming (Compute Drops to $0.00)
+- **When to Pause:** Immediately after completing a college presentation, test run, or grading session.
+- **How to Pause (AWS Console):**
+  1. Open the [AWS App Runner Console](https://console.aws.amazon.com/apprunner/).
+  2. Select your service: `assetflow-backend`.
+  3. Click **Actions > Pause Service**.
+  4. Status changes to `PAUSED`. While paused, **all compute and memory billing drops to $0.00**.
+- **How to Resume Before a Demo:**
+  1. 10 minutes before your demo, navigate to `assetflow-backend`.
+  2. Click **Actions > Resume Service**.
+  3. App Runner provisions the container and resumes the live HTTPS endpoint in ~60–90 seconds.
 
-Parameters configured under `/assetflow/production/`:
+### 3.2 Amazon RDS: Stopping the Database Instance
+- **When to Stop:** If you will not be demonstrating for several days.
+- **How to Stop (AWS Console):**
+  1. Open [Amazon RDS Console](https://console.aws.amazon.com/rds/).
+  2. Select `assetflow-db` > Click **Actions > Stop temporarily**.
+  3. While stopped, **instance compute hours ($0.018/hr) drop to $0.00**. You are billed only for allocated storage (20 GB gp3 $\approx \$2.30/\text{month}$, covered under Free Tier or credits).
+  4. *Note on RDS Behavior:* AWS automatically restarts stopped RDS instances after **7 consecutive days**. If your demonstration is weeks away, set a calendar reminder to re-stop it, or take a manual final snapshot and terminate the instance.
+
+### 3.3 End-of-Semester Permanent Teardown (Zero-Liability Exit)
+When your final capstone evaluation and viva examinations are completed, run the teardown playbook:
+1. **App Runner:** Select `assetflow-backend` > **Actions > Delete**.
+2. **RDS Database:** Select `assetflow-db` > **Actions > Delete** (Uncheck "Create final snapshot", check acknowledgment).
+3. **S3 Bucket:** Empty bucket `assetflow-attachments` > **Delete**.
+4. **Vercel:** Project Settings > **Delete Project**.
+5. **Confirmation:** Check AWS Cost Explorer to confirm 0 active instances across all regions.
+
+---
+
+## 4. Cross-Origin Security: Vercel $\leftrightarrow$ App Runner Configuration
+
+Because Vercel (`https://assetflow.vercel.app`) and AWS App Runner (`https://<id>.<region>.awsapprunner.com`) reside on different apex domains, authentication cookies and CORS require precise cross-origin configuration:
+
+### 4.1 Cookie Security Invariants (CWE-1275 / Third-Party Cookies)
+In a cross-origin setup, the browser considers cookies set by App Runner as **cross-site (third-party)** cookies when accessed from the Vercel frontend. 
+
+To ensure browsers accept and return the session cookie:
+```javascript
+// backend/src/controllers/auth.controller.js
+function getCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,                          // Blocks JavaScript access (XSS defense)
+    secure: true,                            // MANDATORY: Modern browsers reject SameSite=None without HTTPS
+    sameSite: isProduction ? 'none' : 'lax', // 'none' required for cross-domain Vercel <-> App Runner
+    path: '/',
+    maxAge: 8 * 3600 * 1000                  // 8 Hours
+  };
+}
+```
+
+### 4.2 Backend CORS Invariant
+Express must whitelist the exact Vercel production origin with credentials enabled:
+```javascript
+// backend/src/app.js
+const allowedOrigin = process.env.CORS_ORIGIN || 'https://assetflow.vercel.app';
+
+app.use(cors({
+  origin: allowedOrigin,
+  credentials: true,                         // Allows HttpOnly session cookie transmission
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+}));
+```
+
+### 4.3 CSRF Protection in Auth Middleware
+In [backend/src/middleware/authMiddleware.js](file:///D:/cloud/backend/src/middleware/authMiddleware.js), state-changing requests (`POST`, `PUT`, `DELETE`) validate that the `Origin` or `Referer` header strictly matches `process.env.CORS_ORIGIN`. Unmatched origins are rejected with `HTTP 403 Forbidden`.
+
+### 4.4 Frontend API Client Configuration
+In [frontend/src/api/client.js](file:///D:/cloud/frontend/src/api/client.js), requests already enforce `credentials: 'include'`:
+- On Vercel, set the environment variable:
+  `VITE_API_URL=https://<app-runner-id>.<region>.awsapprunner.com`
+- All `fetch()` requests will automatically route to App Runner with credentials included.
+
+---
+
+## 5. Amazon S3 Attachment Integration
+
+For small file and image storage (hardware purchase invoices, warranty certificates, asset photos):
+
+### 5.1 S3 Bucket Hardening
+- **Bucket Name:** `assetflow-attachments-<unique-suffix>`
+- **Block Public Access:** **ON** (All 4 public access blocks enabled).
+- **Default Encryption:** Server-Side Encryption with Amazon S3 Managed Keys (**SSE-S3 / AES-256**) — **100% Free**.
+- **Bucket Policy:** Private; accessible only by the App Runner execution role.
+
+### 5.2 Pre-Signed URL Architecture (Zero Backend Bandwidth)
+Instead of streaming files through Express (which consumes container memory and CPU):
+1. **Upload Flow:** Client requests an upload URL $\rightarrow$ Backend generates an S3 Pre-Signed `PUT` URL with a 15-minute expiration $\rightarrow$ Client uploads directly to S3.
+2. **Download Flow:** Client requests document view $\rightarrow$ Backend generates an S3 Pre-Signed `GET` URL with a 15-minute expiration $\rightarrow$ Client downloads directly from S3.
+3. **File Size Cap:** Express enforces a maximum upload size of **2 MB** per file, ensuring your storage footprint remains negligible (< 100 MB total).
+
+---
+
+## 6. Private Database Access & Environment Secrets
+
+### 6.1 Private VPC Network Isolation for RDS
+- **VPC Subnets:** Deploy RDS PostgreSQL inside private subnets across 2 Availability Zones.
+- **Public Accessibility:** Set `Publicly Accessible = No`.
+- **Security Group Rules (`sg-assetflow-rds`):**
+  - **Inbound:** Port 5432 (PostgreSQL) allowed **strictly** from the App Runner VPC Connector Security Group (`sg-assetflow-apprunner`).
+  - **Outbound:** Deny all unneeded egress.
+  - Under no circumstances is `0.0.0.0/0` exposed.
+
+### 6.2 Zero-Cost Secrets via AWS SSM Parameter Store
+Store secrets under the path `/assetflow/production/` using **Standard Tier** (Free):
 - `/assetflow/production/NODE_ENV`: `production`
 - `/assetflow/production/PORT`: `5000`
-- `/assetflow/production/DB_HOST`: `assetflow-db.xyz.us-east-1.rds.amazonaws.com`
+- `/assetflow/production/CORS_ORIGIN`: `https://assetflow.vercel.app`
+- `/assetflow/production/DB_HOST`: `<rds-endpoint>.rds.amazonaws.com`
 - `/assetflow/production/DB_PORT`: `5432`
 - `/assetflow/production/DB_NAME`: `assetflow`
 - `/assetflow/production/DB_USER`: `assetadmin`
 - `/assetflow/production/DB_PASSWORD`: `[SecureString generated during RDS creation]`
-- `/assetflow/production/SESSION_SECRET`: `[64-character random cryptographically secure string]`
-- `/assetflow/production/CORS_ORIGIN`: `https://assetflow.yourdomain.com` (or CloudFront domain)
+- `/assetflow/production/SESSION_SECRET`: `[64-character random string]`
+- `/assetflow/production/S3_BUCKET_NAME`: `assetflow-attachments-<unique-suffix>`
 
-### 5.3 Database Access & VPC Network Isolation
-- **Database Subnets:** Place RDS PostgreSQL inside a private database subnet group spanning 2 Availability Zones.
-- **Public Accessibility:** Set `Publicly Accessible = No`.
-- **Security Group Inbound Rule:**
-  - **Type:** PostgreSQL (Port 5432)
-  - **Source:** Restricted exclusively to the App Runner VPC Connector Security Group ID (`sg-apprunner-backend`).
-  - **Never** allow `0.0.0.0/0` (anywhere).
-- **SSL Invariant:** Enforce `sslmode=require` in database connection settings to encrypt all traffic in transit between App Runner and RDS.
-
-### 5.4 IAM Least-Privilege Execution Role
-Create an IAM Role `AssetFlowAppRunnerExecutionRole`:
-- Trusted entity: `build.apprunner.amazonaws.com` and `tasks.apprunner.amazonaws.com`.
-- Policies attached:
-  - `AWSAppRunnerServicePolicyForECRAccess` (to pull container image).
-  - Custom inline policy granting read-only access strictly to `/assetflow/production/*` parameters:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ssm:GetParameters",
-        "ssm:GetParameter",
-        "ssm:GetParametersByPath"
-      ],
-      "Resource": "arn:aws:ssm:us-east-1:*:parameter/assetflow/production/*"
-    }
-  ]
-}
-```
+App Runner automatically injects these parameters into `process.env` at container launch using an IAM execution role with `ssm:GetParameters` permissions.
 
 ---
 
-## 6. Credit Consumption & 183-Day Horizon Projections
+## 7. SQLite to PostgreSQL Transition Plan (Non-Destructive)
 
-### Scenario A: Unattended Continuous 24/7 Hosting (HIGH RISK)
-*If resources are left running continuously without pausing:*
+To prepare for PostgreSQL without disturbing your working local SQLite development database:
 
-| Service | Monthly Usage | Unit Rate | Monthly Bill | Credit Impact over 183 Days (6 Mo) |
-| :--- | :--- | :--- | :--- | :--- |
-| **AWS App Runner** | 720 hrs $\times$ 2 GB RAM | $0.007 / GB-hr | ~$10.08 / mo | ~$60.48 |
-| **Amazon RDS PostgreSQL** | 720 hrs Single-AZ `db.t4g.micro` | Free Tier (or $0.018/hr) | $0.00 (Free Tier) or ~$13/mo | $0.00 (if Free Tier) or ~$78.00 |
-| **Amazon S3 & CloudFront** | 5 GB storage + 10 GB transfer | Free Tier | ~$0.10 / mo | ~$0.60 |
-| **CloudWatch Logs** | 1 GB logs | Free Tier | $0.00 | $0.00 |
-| **SSM Parameter Store** | 8 Standard Parameters | Free Tier | $0.00 | $0.00 |
-| **TOTAL (with Free Tier)** | | | **~$10.18 / month** | **~$61.08 (Leaves ~$38.92 buffer)** |
-| **TOTAL (WITHOUT Free Tier)** | | | **~$23.18 / month** | **~$139.08 (EXCEEDS $100 CREDITS AT MO 4!)** |
+### 7.1 Separation of Concerns
+- The working SQLite database at [`data/asset_management.db`](file:///D:/cloud/data/asset_management.db) will **remain completely untouched**.
+- PostgreSQL support will be developed on an isolated Git branch (`feat/postgres-adapter`) using automated tests against a temporary test database.
 
-> [!WARNING]
-> If your AWS account is past its 12-month Free Tier anniversary, continuous 24/7 hosting will **exhaust your $100 credits in approximately 4.3 months**, causing your personal credit card to be charged for the remaining 50+ days!
+### 7.2 Necessary Code Adaptations
+Because AssetFlow encapsulates database operations within [backend/src/repositories/](file:///D:/cloud/backend/src/repositories/), switching to PostgreSQL requires changes in only two localized areas:
 
-### Scenario B: Demo-on-Demand (RECOMMENDED ZERO-RISK STRATEGY)
-*App Runner is resumed only during active presentation, demonstration, and viva grading sessions:*
-
-| Service | Monthly Usage | Cost Behavior | Monthly Bill | Credit Impact over 183 Days |
-| :--- | :--- | :--- | :--- | :--- |
-| **AWS App Runner** | ~20 active hours / month (paused rest of time) | Compute while active (~$1.50) | ~$1.50 / mo | ~$9.00 |
-| **Amazon RDS PostgreSQL** | Single-AZ `db.t4g.micro` (running) | Free Tier (1st yr) or credit | $0.00 - $13.00 / mo | $0.00 - $78.00 |
-| **Amazon S3 & CloudFront** | Static bundle hosted | Under permanent free tiers | ~$0.10 / mo | ~$0.60 |
-| **TOTAL** | | | **~$1.60 - $14.60 / mo** | **$10.00 - $87.60 (Safely within $100)** |
+1. **Database Adapter ([backend/src/config/database.js](file:///D:/cloud/backend/src/config/database.js)):**
+   - Add `"pg": "^8.13.0"` and `"pg-pool": "^3.7.0"`.
+   - Implement an environment-aware database connection:
+     - If `process.env.DB_CLIENT === 'postgres'`, instantiate a `pg.Pool`.
+     - Otherwise, default to the existing SQLite driver.
+2. **SQL Query Placeholders & Insertion IDs:**
+   - In PostgreSQL, positional parameters `?` become indexed placeholders (`$1, $2, ...`).
+   - SQLite's `this.lastID` is replaced with standard SQL `RETURNING id`.
+3. **DDL Schema Migration:**
+   - A dedicated PostgreSQL migration script (`backend/src/db/postgres-schema.sql`) translates types:
+     - `INTEGER PRIMARY KEY AUTOINCREMENT` $\rightarrow$ `SERIAL PRIMARY KEY`
+     - `DATETIME('now')` $\rightarrow$ `TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP`
+     - `TEXT` booleans $\rightarrow$ `BOOLEAN DEFAULT TRUE`
 
 ---
 
-## 7. Step-by-Step Implementation Roadmap (Approval Gates)
+## 8. 183-Day Credit Consumption & Cost Risk Forecast
 
-Any future deployment to AWS must proceed strictly through these sequential phases, each requiring written user authorization:
+### Scenario: Demo-on-Demand Mode (Recommended Strategy)
+*App Runner is active for ~10 hours/month during presentation rehearsals and grading; RDS is running Single-AZ:*
 
-```
-[Phase 1: Pre-requisites & Account Hardening]
-  │ (Check credits, set $0.01 Budget Alarm, enable MFA)
-  ▼
-[Phase 2: PostgreSQL Compatibility Layer]
-  │ (Create git branch 'feat/postgres-adapter', test with pg-pool)
-  ▼
-[Phase 3: Database & Secrets Provisioning]
-  │ (Provision RDS db.t4g.micro, populate SSM parameters)
-  ▼
-[Phase 4: Container Build & App Runner Service]
-  │ (Build Docker image, push to private ECR, start App Runner)
-  ▼
-[Phase 5: Frontend Build & CloudFront Distribution]
-  │ (Build Vite dist, upload to S3, configure CloudFront single-origin)
-  ▼
-[Phase 6: Live Smoke Verification & Immediate Pause]
-  │ (Verify login, CRUD, export, then PAUSE App Runner to save credits)
-```
+| Component | Usage Model | Billed Against | Monthly Cost | 183-Day Total (6 Months) |
+| :--- | :--- | :--- | :---: | :---: |
+| **Vercel Frontend** | Continuous 24/7 | Free Hobby Tier | **$0.00** | **$0.00** |
+| **AWS App Runner** | ~10 active hrs/month (paused otherwise) | $100 Credits | **~$0.15** | **~$0.90** |
+| **Amazon RDS PostgreSQL** | Single-AZ `db.t4g.micro` + 20 GB gp3 | Free Tier (or Credits) | **$0.00 - $13.00** | **$0.00 - $78.00** |
+| **Amazon S3** | < 100 MB demo attachments | Free Tier | **<$0.01** | **<$0.06** |
+| **AWS SSM Parameter Store**| 10 Standard parameters | Free Forever | **$0.00** | **$0.00** |
+| **TOTAL WITH FREE TIER** | | | **~$0.16 / month** | **~$0.96 (Leaves $99.04 credit buffer)** |
+| **TOTAL WITHOUT FREE TIER**| *(If account > 12 months)* | | **~$13.16 / month** | **~$78.96 (Safely within $100 credits)** |
+
+> [!TIP]
+> **Zero Out-of-Pocket Guarantee:** Even in the worst-case scenario where your account is past its 12-month Free Tier anniversary, the entire 6-month deployment consumes **under $80.00 of your $100 credits**, leaving a $20+ margin of safety and **₹0 out of pocket**.
 
 ---
 
-## 8. Exact Next Steps Requiring User Written Approval
+## 9. Pre-Deployment Verification Checklist & Approvals
 
-Before a single command is run or resource created, the following actions must be reviewed and approved:
+Before any provisioning commands are executed, you must complete the pre-deployment checks:
 
-1. **Complete Phase 0 Console Verification:**
-   - Execute all checks in [docs/AWS_ZERO_COST_CHECKLIST.md](file:///D:/cloud/docs/AWS_ZERO_COST_CHECKLIST.md).
-   - Confirm active $100 credits and account 12-month Free Tier standing.
-   - Confirm the **$0.01 AWS Budget** is active with your verified email alert.
-2. **Select Database Provider Strategy:**
-   - *Option 1 (All-AWS):* Amazon RDS PostgreSQL (`db.t4g.micro` Single-AZ). Covered by Free Tier if account < 12 months, or drawn against $100 credits.
-   - *Option 2 (Zero-Credit Drain Alternative):* Neon.tech Serverless PostgreSQL (permanent free tier, $0 credits consumed, zero credit card risk).
-3. **Approve Code Adaptation Branch:**
-   - Authorize creating a separate Git branch `feat/postgres-adapter` to add PostgreSQL query support while leaving the working SQLite `master` branch untouched.
-4. **Authorize Deployment Execution:**
-   - Provide explicit written confirmation: *"I have verified my AWS credits, created the $0.01 budget alert, and authorize Phase 1 implementation."*
+1. [ ] **Verify $100 Credits:** Check [Billing > Credits](https://console.aws.amazon.com/billing/home#/credits) (confirm $\ge \$100$ and $\ge 183$ days).
+2. [ ] **Verify Free Tier Standing:** Check [Billing > Free Tier](https://console.aws.amazon.com/billing/home#/freetier).
+3. [ ] **Set $0.01 AWS Budget:** Configure the zero-spend alarm in [AWS Budgets](https://console.aws.amazon.com/billing/home#/budgets).
+4. [ ] **Create Free Vercel Account:** Connect GitHub repository on [vercel.com](https://vercel.com).
+5. [ ] **Written Authorization:** Confirm proceeding with code branch creation and infrastructure provisioning.
