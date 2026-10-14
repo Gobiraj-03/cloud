@@ -12,8 +12,8 @@
 | **4** | **IT Asset Management & Employee Assignment** | Asset CRUD, category filters, assignment workflow, return/reassign, history preservation | **COMPLETED (55/55 Backend, 20/20 Frontend Tests Passed)** | **Authorized** |
 | **5** | **Software License Management** | License CRUD, seat allocation, utilized vs total calculation, expiry classification | **COMPLETED (85/85 Backend, 32/32 Frontend Tests Passed)** | **Authorized** |
 | **6** | **Expiry Alerts, Reporting & CSV Export** | 30-day expiry engine, warranty warnings, 7 filtered compliance reports, CSV download with injection defense | **COMPLETED (110/110 Backend, 41/41 Frontend Tests Passed)** | **Authorized** |
-| **7** | **AWS Cost Verification & Deployment Preparation** | Account eligibility audit, cost verification, build packaging, deployment only on approval | Not Started | **STRICTLY BLOCKED** |
-| **8** | **End-to-End Testing & Viva Presentation** | E2E test suite, architecture diagrams, viva demo script, documentation polish | Not Started | Blocked |
+| **7** | **AWS Cost Verification & Deployment Preparation** | Account eligibility audit, cost verification, migration roadmap, deployment blocked for cost safety | **ANALYZED & SAFELY BLOCKED (₹0 Maintained)** | **Evaluated** |
+| **8** | **Final Verification, Architecture Diagrams & Viva Prep** | E2E verification, 8 Mermaid diagrams, college demo script, 42 viva Q&As, local setup guide | **COMPLETED (151/151 Total Tests Passing)** | **Authorized** |
 
 ---
 
@@ -153,8 +153,33 @@
 
 ---
 
-### Modules 7 through 8
-*(Full criteria detailed in Module 0 baseline — awaiting progressive authorization)*
+### Module 7: AWS Cost Verification & Deployment Preparation (Analyzed & Safely Held)
+- [x] Comprehensive AWS service cost audit conducted across App Runner, RDS PostgreSQL, S3, CloudFront, and CloudWatch.
+- [x] Documented hidden cost traps (App Runner provisioned memory hours, RDS 12-month free tier cutoff, Multi-AZ charges).
+- [x] Established strict ₹0 policy: Cloud deployment held to guarantee zero financial liability for the student.
+- [x] Formulated architectural migration roadmap to Amazon RDS PostgreSQL and AWS App Runner in `docs/DEPLOYMENT_READINESS.md`.
+
+---
+
+### Module 8: Final Verification, Architecture Diagrams, Demo Guide & Viva Preparation (Completed)
+- [x] **End-to-End Application Verification:** Verified authentication security, employee management, hardware asset lifecycle (assign/return/history), software license allocation math, on-demand expiry classification, 7 compliance reports, and formula-safe CSV exports.
+- [x] **Architecture Diagrams:** Created 8 visual architecture diagrams using standard Mermaid syntax in `docs/diagrams/`:
+  - `system-architecture.md`: 3-tier layered system architecture.
+  - `auth-sequence.md`: Stateful session authentication and HttpOnly cookie lifecycle.
+  - `asset-lifecycle.md`: Hardware asset state machine and atomic assignment transactions.
+  - `license-lifecycle.md`: Software seat capacity invariant enforcement and non-destructive revocation.
+  - `expiry-engine.md`: UTC date boundary arithmetic decision tree.
+  - `reports-csv-export.md`: Compliance report generation and formula injection defense.
+  - `local-deployment.md`: Current Stage A Windows localhost execution topology.
+  - `cloud-architecture-proposed.md`: Proposed Stage B AWS cloud architecture with container ephemerality analysis.
+  - `README.md`: Centralized diagram index catalog.
+- [x] **College Demonstration Guide:** Created `docs/DEMO_GUIDE.md` detailing a 7–10 minute presentation script, cue sheet, click-by-click walkthrough, talking points, and error fallbacks.
+- [x] **Viva Voce Examination Preparation:** Created `docs/VIVA_QUESTIONS.md` featuring 42 technical questions and concise answers grounded in the real codebase.
+- [x] **Local Setup & Troubleshooting Guide:** Created `docs/LOCAL_SETUP.md` with exact Windows PowerShell setup commands and common error resolutions.
+- [x] **Deployment Readiness & Gap Analysis:** Created `docs/DEPLOYMENT_READINESS.md` detailing multi-instance storage requirements, containerization steps, and production secrets.
+- [x] **Automated Regression Test Suite:** Verified 151/151 automated tests passing (110 backend, 41 frontend) with zero failures.
+- [x] **Production Bundle Build:** Verified Vite client build compiling cleanly in 754ms (`frontend/dist/`).
+- [x] **Database & Secret Hygiene:** Verified zero secrets committed, zero database resets, and development database preserved intact.
 
 ---
 
