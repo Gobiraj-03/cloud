@@ -17,8 +17,9 @@ node_modules/
 *.db-journal
 *.db-wal
 *.db-shm
-*.bak
-data/
+data/*.sqlite
+data/*.sqlite3
+data/*.db
 
 # Build outputs
 dist/
@@ -41,3 +42,4 @@ coverage/
 Thumbs.db
 .vscode/
 .idea/
+
