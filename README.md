@@ -287,5 +287,7 @@ Complete technical documentation is available in the `docs/` directory:
 | **Viva Voce Q&A** | [docs/VIVA_QUESTIONS.md](file:///d:/cloud/docs/VIVA_QUESTIONS.md) | 42 comprehensive technical viva questions and answers grounded in the real source code. |
 | **Local Setup Guide** | [docs/LOCAL_SETUP.md](file:///d:/cloud/docs/LOCAL_SETUP.md) | Windows PowerShell setup commands, dependency installation, and troubleshooting guide. |
 | **Deployment Readiness** | [docs/DEPLOYMENT_READINESS.md](file:///d:/cloud/docs/DEPLOYMENT_READINESS.md) | Multi-instance storage analysis, containerization steps, and production security roadmap. |
+| **AWS Zero-Cost Checklist** | [docs/AWS_ZERO_COST_CHECKLIST.md](file:///d:/cloud/docs/AWS_ZERO_COST_CHECKLIST.md) | Pre-deployment console verification, credit guardrails, and hidden cost trap mitigations. |
+| **AWS Deployment Plan** | [docs/AWS_DEPLOYMENT_PLAN.md](file:///d:/cloud/docs/AWS_DEPLOYMENT_PLAN.md) | Safest cloud architecture blueprint, SQLite-to-PostgreSQL plan, and 183-day credit forecast. |
 | **Cost Analysis** | [docs/COST_AND_DEPLOYMENT.md](file:///d:/cloud/docs/COST_AND_DEPLOYMENT.md) | In-depth AWS cost analysis, hidden traps, and ₹0 academic budget guardrails. |
 | **Implementation Progress** | [docs/IMPLEMENTATION_PROGRESS.md](file:///d:/cloud/docs/IMPLEMENTATION_PROGRESS.md) | Full module-by-module tracking, acceptance criteria, and verified test execution logs. |

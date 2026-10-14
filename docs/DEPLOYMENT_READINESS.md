@@ -149,3 +149,12 @@ On Amazon RDS:
 > 3. Cloud pricing, bandwidth limits, and free-tier inclusions are subject to change by cloud vendors at any time.
 >
 > **Policy Directive:** For the purposes of this Computer Science Capstone course evaluation, **AssetFlow remains safely in Stage A (Local Development)**. The system has achieved 100% functional completeness and test verification without exposing the student to financial liability.
+
+---
+
+## 9. Associated Cloud Deployment Guides
+
+- **AWS Zero-Cost Checklist & Pre-Deployment Console Checks:** [docs/AWS_ZERO_COST_CHECKLIST.md](file:///d:/cloud/docs/AWS_ZERO_COST_CHECKLIST.md)
+- **AWS Cloud Deployment Architecture & Implementation Plan:** [docs/AWS_DEPLOYMENT_PLAN.md](file:///d:/cloud/docs/AWS_DEPLOYMENT_PLAN.md)
+- **Mermaid Proposed Cloud Diagram:** [docs/diagrams/cloud-architecture-proposed.md](file:///d:/cloud/docs/diagrams/cloud-architecture-proposed.md)
+- **Cost Analysis & Free Tier Strategy:** [docs/COST_AND_DEPLOYMENT.md](file:///d:/cloud/docs/COST_AND_DEPLOYMENT.md)
