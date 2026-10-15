@@ -3,10 +3,25 @@ const { SESSION_COOKIE_NAME } = require('../middleware/authMiddleware');
 
 function getCookieOptions() {
   const isProduction = process.env.NODE_ENV === 'production';
+  // Cross-site cookie configuration for separated frontend (Vercel) and backend (AWS App Runner)
+  // When CORS_ORIGIN is configured in production or COOKIE_SAME_SITE is specified,
+  // SameSite=None + Secure=true is used so cookies are transmitted across origins.
+  // When running in same-site mode without CORS_ORIGIN, SameSite=Lax is preserved.
+  let sameSiteSetting = 'lax';
+  if (process.env.COOKIE_SAME_SITE) {
+    sameSiteSetting = process.env.COOKIE_SAME_SITE.toLowerCase();
+  } else if (isProduction && process.env.CORS_ORIGIN && process.env.CORS_ORIGIN.startsWith('https://')) {
+    sameSiteSetting = 'none';
+  }
+
+  const secureSetting = process.env.COOKIE_SECURE !== undefined
+    ? process.env.COOKIE_SECURE === 'true'
+    : (isProduction || sameSiteSetting === 'none');
+
   return {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
+    secure: secureSetting,
+    sameSite: sameSiteSetting,
     path: '/',
     maxAge: 8 * 3600 * 1000 // 8 hours in milliseconds
   };

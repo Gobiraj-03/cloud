@@ -139,8 +139,16 @@ If the student's AWS account is older than 12 months or App Runner memory costs 
 
 ---
 
-## 5. Deployment Authorization Status
+## 5. Deployment Authorization Status at Module 8 Checkpoint
 
-- **Current Status**: **BLOCKED**
-- **Authorization Required**: Explicit user sign-off in Module 7.
-- **Permitted Actions in Current Module (Module 0)**: Architectural documentation and cost modeling only.
+- **Stage A (Local Execution):** **100% COMPLETED & VERIFIED (₹0.00 Spent)**.
+  - All 151 automated tests passing.
+  - Full application running locally on Windows via Node.js + Express and React + Vite.
+  - Preserved embedded SQLite database without external dependencies.
+- **Stage B (Cloud Deployment):** **STRICTLY BLOCKED & UNPROVISIONED**.
+  - No AWS, Azure, or GCP accounts billed.
+  - Zero cloud resources created.
+  - Comprehensive migration guide and readiness audit available in [docs/DEPLOYMENT_READINESS.md](file:///d:/cloud/docs/DEPLOYMENT_READINESS.md).
+  - Pre-deployment console checklist: [docs/AWS_ZERO_COST_CHECKLIST.md](file:///d:/cloud/docs/AWS_ZERO_COST_CHECKLIST.md).
+  - Cloud deployment architecture blueprint: [docs/AWS_DEPLOYMENT_PLAN.md](file:///d:/cloud/docs/AWS_DEPLOYMENT_PLAN.md).
+- **Academic Defense Recommendation:** Proceed with local demonstration. College examiners evaluate architectural depth, data integrity, security hardening, and testing rigor—all of which are fully demonstrated in Stage A without financial risk.

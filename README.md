@@ -215,16 +215,16 @@ All endpoints are authenticated using server-side cookie sessions (`HttpOnly` se
 | `POST` | `/api/assets/:id/assign` | Atomic transaction: Assign available asset to active employee, update status to `ASSIGNED`, record history. |
 | `POST` | `/api/assets/:id/return` | Atomic transaction: Return assigned asset, update status to `AVAILABLE`, record return history. |
 
-### 7.2 Running and Testing Module 4 & 5
+### 7.2 Running and Testing All Modules
 
 ```powershell
-# Run the complete test suite (117 passing tests across backend & frontend)
+# Run the complete test suite (151 passing tests across backend & frontend)
 npm test
 
-# Run backend test suite only (85 passing tests)
+# Run backend test suite only (110 passing tests)
 npm run backend:test
 
-# Run frontend test suite only (32 passing tests)
+# Run frontend test suite only (41 passing tests)
 npm run frontend:test
 
 # Build production bundle
@@ -252,17 +252,42 @@ All endpoints require administrator cookie-session authentication (`authenticate
 
 ### 8.2 Invariant Integrity & Concurrency Guarantees
 
-1. **Seat Capacity Invariant**:
-   `0 <= used_quantity <= total_quantity`
-   - `available_quantity` is always empirically derived on the server (`total_quantity - used_quantity`).
-   - Client-supplied available seat counts are never trusted.
-2. **Atomic Concurrency Protection**:
-   - `allocateSeat` executes conditional update `UPDATE software_licenses SET used_quantity = used_quantity + 1 WHERE id = ? AND used_quantity < total_quantity` inside `db.transaction`.
-   - If capacity is exhausted concurrently, the transaction rolls back and returns `409 Conflict`.
-3. **Non-Destructive Allocation History**:
-   - Forward-only migration added `revoked_at TEXT NULL` to `license_allocations`.
-   - Active allocations: `revoked_at IS NULL`.
-   - Revoking an allocation stamps `revoked_at` without deleting the row, preserving enterprise compliance audit trails.
+1. **Seat Capacity Invariant**: `0 <= used_quantity <= total_quantity`
+2. **Atomic Concurrency Protection**: Conditional update `WHERE used_quantity < total_quantity` prevents over-allocation race conditions.
+3. **Non-Destructive Allocation History**: Allocation rows are never deleted; `revoked_at` is stamped for permanent audit compliance.
 
+---
 
+## 9. Module 6: Expiry Alerts, Reporting & Formula-Safe CSV Export
 
+### 9.1 Implemented API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/expiry/licenses` | Classified license expiry buckets (`EXPIRED`, `EXPIRING_7_DAYS`, `EXPIRING_30_DAYS`, `VALID`, `NO_EXPIRY`). |
+| `GET` | `/api/expiry/warranty` | Hardware asset warranty expiry classifications. |
+| `GET` | `/api/expiry/dashboard` | Real-time aggregate expiry metrics for the dashboard. |
+| `GET` | `/api/reports` | Catalog of 7 compliance report types. |
+| `GET` | `/api/reports/:type` | In-browser JSON preview with record counts and formatted columns. |
+| `GET` | `/api/reports/:type/csv` | Formula-injection-safe CSV file stream with descriptive filename headers. |
+
+### 9.2 Formula Injection Defense (CWE-1236)
+All exported CSV cells starting with dangerous formula characters (`=`, `+`, `-`, `@`, `\t`, `\r`) are automatically escaped with a leading single quote (`'`), neutralizing spreadsheet macro execution in Microsoft Excel and Google Sheets.
+
+---
+
+## 10. Documentation & Viva Examination Catalog
+
+Complete technical documentation is available in the `docs/` directory:
+
+| Document | File Path | Purpose & Contents |
+| :--- | :--- | :--- |
+| **Architecture Diagrams** | [docs/diagrams/README.md](file:///d:/cloud/docs/diagrams/README.md) | 8 visual Mermaid diagrams (System, Auth, Asset Lifecycle, License Lifecycle, Expiry Engine, CSV Export, Local Topology, Proposed Cloud). |
+| **College Demo Guide** | [docs/DEMO_GUIDE.md](file:///d:/cloud/docs/DEMO_GUIDE.md) | 7–10 minute presentation walkthrough, cue sheet, click-by-click scripts, and talking points. |
+| **Viva Voce Q&A** | [docs/VIVA_QUESTIONS.md](file:///d:/cloud/docs/VIVA_QUESTIONS.md) | 42 comprehensive technical viva questions and answers grounded in the real source code. |
+| **Local Setup Guide** | [docs/LOCAL_SETUP.md](file:///d:/cloud/docs/LOCAL_SETUP.md) | Windows PowerShell setup commands, dependency installation, and troubleshooting guide. |
+| **Deployment Readiness** | [docs/DEPLOYMENT_READINESS.md](file:///d:/cloud/docs/DEPLOYMENT_READINESS.md) | Multi-instance storage analysis, containerization steps, and production security roadmap. |
+| **AWS Zero-Cost Checklist** | [docs/AWS_ZERO_COST_CHECKLIST.md](file:///d:/cloud/docs/AWS_ZERO_COST_CHECKLIST.md) | Pre-deployment console verification, credit guardrails, and hidden cost trap mitigations. |
+| **AWS Deployment Plan** | [docs/AWS_DEPLOYMENT_PLAN.md](file:///d:/cloud/docs/AWS_DEPLOYMENT_PLAN.md) | Safest cloud architecture blueprint, SQLite-to-PostgreSQL plan, and 183-day credit forecast. |
+| **Cost Analysis** | [docs/COST_AND_DEPLOYMENT.md](file:///d:/cloud/docs/COST_AND_DEPLOYMENT.md) | In-depth AWS cost analysis, hidden traps, and ₹0 academic budget guardrails. |
+| **Implementation Progress** | [docs/IMPLEMENTATION_PROGRESS.md](file:///d:/cloud/docs/IMPLEMENTATION_PROGRESS.md) | Full module-by-module tracking, acceptance criteria, and verified test execution logs. |

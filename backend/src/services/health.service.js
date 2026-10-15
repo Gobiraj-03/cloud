@@ -16,7 +16,7 @@ class HealthService {
       uptimeSeconds: Math.floor(process.uptime()),
       database: {
         status: dbHealth.alive ? 'CONNECTED' : 'DISCONNECTED',
-        engine: 'SQLite 3',
+        engine: dbHealth.engine || (healthRepository.getEngineName ? healthRepository.getEngineName() : 'SQLite 3'),
         tablesFound: dbHealth.tableCount,
         ...(dbHealth.error ? { error: dbHealth.error } : {})
       }
