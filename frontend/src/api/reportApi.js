@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, buildApiUrl } from './client';
 
 /**
  * Reports & CSV Export API Client
@@ -30,7 +30,7 @@ export const reportApi = {
 
   /**
    * Downloads CSV file for a given report type.
-   * Uses fetch directly to handle binary blob download.
+   * Uses fetch directly to handle binary blob download with full credentials and base URL.
    * @param {string} type - Report type identifier.
    * @param {Object} [params] - Optional filters.
    */
@@ -40,7 +40,7 @@ export const reportApi = {
       if (value) query.set(key, value);
     });
     const queryString = query.toString() ? `?${query.toString()}` : '';
-    const url = `/api/reports/${type}/csv${queryString}`;
+    const url = buildApiUrl(`/api/reports/${type}/csv${queryString}`);
 
     const response = await fetch(url, {
       credentials: 'include',

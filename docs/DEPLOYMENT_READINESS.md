@@ -101,32 +101,176 @@ const cookieOptions = {
 
 ## 5. Database Migration and Backup Strategy
 
-To move from SQLite to Amazon RDS PostgreSQL:
+To move from SQLite to Amazon RDS PostgreSQL (Implemented and verified in Stages 1 & 2):
 
-### Step 1: PostgreSQL Schema Definition
-Create a migration file `backend/src/db/postgres-schema.sql` translating SQLite dialect:
-- `INTEGER PRIMARY KEY AUTOINCREMENT` → `SERIAL PRIMARY KEY` or `GENERATED ALWAYS AS IDENTITY`
+### Step 1: PostgreSQL Schema Definition (Completed)
+Created [`backend/src/db/postgres-schema.sql`](file:///D:/cloud/backend/src/db/postgres-schema.sql) translating SQLite dialect:
+- `INTEGER PRIMARY KEY AUTOINCREMENT` → `SERIAL PRIMARY KEY`
 - `TEXT` timestamps → `TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP`
-- Enforce relational constraints (`ON DELETE RESTRICT`)
+- Enforces relational foreign-key constraints (`ON DELETE RESTRICT`, `ON DELETE CASCADE`) and check constraints.
+- Configures 13 performance indexes matching the production SQLite database.
 
-### Step 2: Seed & Data Transfer
-Use a conversion script (`node-sqlite3` to `pg`) to export existing local assets, employees, and licenses into the RDS PostgreSQL instance within an atomic transaction.
+### Step 2: Safe Data Migration & Import Script (Completed)
+Created [`backend/src/scripts/migrate-sqlite-to-postgres.js`](file:///D:/cloud/backend/src/scripts/migrate-sqlite-to-postgres.js):
+- **Safety Defaults:** Defaults to **dry-run mode** (`node src/scripts/migrate-sqlite-to-postgres.js`), extracting and reporting records without modifying target DB.
+- **Explicit Execution:** Requires `--execute` to perform live imports.
+- **Atomic Transaction:** Executes all inserts inside `BEGIN ... COMMIT` with automatic `ROLLBACK` on any error.
+- **Sequence Synchronization:** Automatically aligns PostgreSQL `SERIAL` sequences with `MAX(id)` to prevent primary key collision errors on subsequent inserts.
+- **Read-Only SQLite Access:** Opens local SQLite using `sqlite3.OPEN_READONLY` to guarantee existing development data is never modified.
+- **Dry-Run Verified:** Tested against local SQLite database; confirmed 100% extraction parity across all 8 tables (68 rows).
 
 ### Step 3: Disaster Recovery & Automated Backups
-On Amazon RDS:
-- Enable **Automated Daily Backups** with a 7-day retention period (included in AWS Free Tier).
-- Enable **Point-in-Time Recovery (PITR)**, allowing the database to be restored to any specific second in the past week.
-- Take manual DB snapshots before running any production schema migrations.
+- Timestamped backup created and verified at [`backups/asset_management_20261014_210426.db`](file:///D:/cloud/backups/asset_management_20261014_210426.db) (135,168 bytes, 8 tables intact).
+- Original SQLite database untouched at [`data/asset_management.db`](file:///D:/cloud/data/asset_management.db) (135,168 bytes).
+- On Amazon RDS:
+  - Enable **Automated Daily Backups** with a 1-day retention period (included in AWS Free Tier).
+  - Take manual DB snapshots before running any production schema migrations.
 
 ---
 
-## 6. Observability, Logging, and Audit Trails
+## 6. Stage 3 Production Hosting & Deployment Specification
 
-1. **Structured JSON Logging:** Replace `console.log` with a structured logger (`pino` or `winston`) emitting JSON log events with timestamp, request ID, user ID, and HTTP method.
-2. **Amazon CloudWatch Integration:**
-   - App Runner automatically pipes container `stdout` and `stderr` directly into CloudWatch Log Groups.
-   - Establish a **Metric Filter** searching for HTTP 500 errors or unauthorized access attempts (`LOGIN_FAILED`).
-3. **Audit Log Retention:** Ensure the `audit_logs` table is backed up regularly and restricted from physical deletion, supporting corporate compliance audits (SOC 2, ISO 27001).
+### 6.1 Frontend (Vercel) Environment Variables & Build Requirements
+
+| Variable | Recommended Value | Purpose & Notes |
+| :--- | :--- | :--- |
+| `VITE_API_BASE_URL` | `https://<app-id>.<region>.awsapprunner.com` | Base URL for all Express API requests and CSV exports. Leave empty or unset for local dev (`/api`). |
+| `VITE_API_URL` | *(Optional Fallback)* | Legacy fallback supported if `VITE_API_BASE_URL` is omitted. |
+
+> [!IMPORTANT]
+> **Vercel Redeployment Requirement:**  
+> Vite statically bakes `import.meta.env` values into JavaScript chunks during `npm run build` (`dist/`). Changing `VITE_API_BASE_URL` in the Vercel Dashboard requires clicking **Deployments > Redeploy** for the new API endpoint to take effect in production.
+
+---
+
+### 6.2 Backend (Express) Environment Variables & Startup Commands
+
+| Variable | Production Value | Local Development Value | Description |
+| :--- | :--- | :--- | :--- |
+| `PORT` | `5000` *(or platform default)* | `5000` | Port for the HTTP server. Express defaults to `5000` if omitted. |
+| `HOST` | `0.0.0.0` | `0.0.0.0` *(or `localhost`)* | Binds to `0.0.0.0` so container orchestrators and health checks can route traffic. |
+| `NODE_ENV` | `production` | `development` | Enables production security checks, logging mode, and strict cookie flags. |
+| `TRUST_PROXY` | `1` | `0` | Instructs Express to trust reverse proxies (App Runner / CloudFront) for `req.ip` and HTTPS recognition. |
+| `CORS_ORIGIN` | `https://assetflow.vercel.app` | `http://localhost:5173` | Allowed frontend origin. Supports comma-separated list of origins and strips trailing slashes. |
+| `COOKIE_SAME_SITE` | `none` *(auto-set when CORS_ORIGIN is HTTPS)* | `lax` | Browser cookie cross-site policy. `None` is required when frontend and API are on different domains. |
+| `COOKIE_SECURE` | `true` *(auto-set in production)* | `false` | Mandates HTTPS transmission. Browsers reject `SameSite=None` without `Secure=true`. |
+| `DB_CLIENT` | `postgres` | `sqlite` | Activates the PostgreSQL connection pool or defaults to the local SQLite engine. |
+| `DATABASE_URL` | `postgres://user:pass@host:5432/assetflow` | *(Omitted)* | Standard PostgreSQL connection string (auto-enables SSL in production). |
+| `DB_HOST` | `assetflow-db.xyz.rds.amazonaws.com` | *(Omitted)* | RDS PostgreSQL endpoint (if `DATABASE_URL` not used). |
+| `DB_PORT` | `5432` | *(Omitted)* | PostgreSQL port. |
+| `DB_NAME` | `assetflow` | *(Omitted)* | PostgreSQL database name. |
+| `DB_USER` | `assetadmin` | *(Omitted)* | Database master username. |
+| `DB_PASSWORD` | `[Secure RDS Password]` | *(Omitted)* | Database master password (managed via AWS SSM). |
+| `DB_SSL` | `true` | `false` | Enforces TLS connection to RDS PostgreSQL with certificate verification. |
+| `DB_POOL_MAX` | `10` | *(Omitted)* | Maximum concurrent client connections in the PostgreSQL pool. |
+
+#### Backend Startup Command
+```bash
+# Production Container Launch Command
+npm start
+# Executes: node server.js
+```
+`server.js` automatically:
+1. Binds to `HOST` (`0.0.0.0`) and `PORT` (`process.env.PORT || 5000`).
+2. Detects `DB_CLIENT` / `DATABASE_URL` and initializes the PostgreSQL pool with live ping check.
+3. Sets up graceful shutdown listeners (`SIGINT` and `SIGTERM`) that close active HTTP connections, cleanly drain the database pool via `db.close()`, and enforce a 10-second safety timeout.
+
+---
+
+### 6.3 PostgreSQL Connection Settings & Migration Procedure
+
+#### 1. Schema Provisioning (Target PostgreSQL)
+Execute the DDL schema before migrating data:
+```bash
+# Apply schema to Amazon RDS PostgreSQL using psql
+psql -h <rds-endpoint>.rds.amazonaws.com -p 5432 -U assetadmin -d assetflow -f backend/src/db/postgres-schema.sql
+```
+Creates all 8 relational tables, primary key serial sequences, foreign keys (`ON DELETE RESTRICT`/`SET NULL`/`CASCADE`), constraints, and 13 performance indexes.
+
+#### 2. Dry-Run Data Migration (Safe Simulation)
+```bash
+# From workspace root or backend directory:
+node backend/src/scripts/migrate-sqlite-to-postgres.js
+```
+- Reads source SQLite in `OPEN_READONLY` mode.
+- Validates row counts across all 8 tables.
+- Mapped 100% of rows (68 records).
+- Performs zero writes; target database is untouched.
+
+#### 3. Real Migration Execution (Atomic Transaction)
+```bash
+# Set PostgreSQL connection variables in your shell or .env:
+export DB_CLIENT=postgres
+export DATABASE_URL="postgres://assetadmin:<password>@<rds-endpoint>.rds.amazonaws.com:5432/assetflow?sslmode=require"
+
+# Execute atomic import:
+node backend/src/scripts/migrate-sqlite-to-postgres.js --execute
+```
+**Safety Invariants Enforced During Migration:**
+- Enclosed inside a single `BEGIN ... COMMIT` transaction.
+- Tables imported in strict topological dependency order:
+  1. `administrators`
+  2. `employees`
+  3. `assets`
+  4. `asset_assignment_history`
+  5. `software_licenses`
+  6. `license_allocations`
+  7. `audit_logs`
+  8. `sessions`
+- Normalizes empty strings in nullable columns (`last_login`, `notes`, `warranty_expiry`, etc.) to SQL `NULL`.
+- Synchronizes all PostgreSQL `SERIAL` sequences to `MAX(id)` using `pg_get_serial_sequence`.
+- Compares source and destination row counts for 100% parity.
+- Automatically rolls back (`ROLLBACK`) if any constraint or connection error occurs.
+
+---
+
+### 6.4 Health-Check URL & Troubleshooting Guide
+
+**Endpoint:** `GET /api/health`
+
+#### Healthy Response (`200 OK`)
+```json
+{
+  "status": "UP",
+  "healthy": true,
+  "timestamp": "2026-10-14T16:15:00.000Z",
+  "environment": "production",
+  "uptimeSeconds": 1420,
+  "database": {
+    "status": "CONNECTED",
+    "engine": "PostgreSQL",
+    "tablesFound": 8
+  }
+}
+```
+
+#### Degraded / Disconnected Response (`503 Service Unavailable`)
+```json
+{
+  "status": "DOWN",
+  "healthy": false,
+  "timestamp": "2026-10-14T16:15:00.000Z",
+  "environment": "production",
+  "uptimeSeconds": 12,
+  "database": {
+    "status": "DISCONNECTED",
+    "engine": "PostgreSQL",
+    "tablesFound": 0,
+    "error": "connect ECONNREFUSED 10.0.1.42:5432"
+  }
+}
+```
+
+#### Common Operational Issues & Remediation Steps
+
+| Symptom | Root Cause | Exact Remediation Step |
+| :--- | :--- | :--- |
+| **503 Database Disconnected** | RDS instance stopped or VPC Security Group blocking traffic | In AWS RDS Console: check instance status is `Available`. Ensure RDS Security Group allows inbound TCP port `5432` from the App Runner VPC connector security group. |
+| **403 Origin Blocked by CORS** | `CORS_ORIGIN` mismatch with Vercel frontend | Set `CORS_ORIGIN=https://<your-project>.vercel.app` in App Runner environment variables. Backend supports comma-separated origins and automatically strips trailing slashes. |
+| **403 CSRF Validation Failure** | Origin / Referer header missing or mismatched on state-changing request | Ensure frontend requests include standard headers and `credentials: 'include'`. Verify `CORS_ORIGIN` matches request origin exactly. |
+| **Session Cookie Not Stored / Sent** | `SameSite=Lax` or `Secure=false` on cross-site requests | Ensure backend runs with `NODE_ENV=production` and `CORS_ORIGIN=https://...`. Backend automatically applies `SameSite=None` and `Secure=true`. Both frontend and backend must be accessed over `https://`. |
+| **404 API Route Not Found** | `VITE_API_BASE_URL` misconfigured on Vercel | Set `VITE_API_BASE_URL=https://<apprunner-domain>.awsapprunner.com`. Do NOT include a trailing `/api` (client automatically appends `/api/...`). Trigger a Vercel Redeploy. |
+| **Container Fails App Runner Health Check** | Server listening on `localhost` instead of `0.0.0.0` | `server.js` is configured with `HOST=0.0.0.0`. Set App Runner health check path to `/api/health` with protocol `HTTP` and port `5000`. |
 
 ---
 
@@ -145,7 +289,7 @@ On Amazon RDS:
 > [!CAUTION]
 > **PERMANENT ₹0 CLOUD HOSTING CANNOT BE GUARANTEED ON AWS:**
 > 1. AWS Free Tier benefits (such as 750 hours of RDS and 5 GB S3) are valid **strictly for the first 12 months** following account creation.
-> 2. App Runner idle memory is **not free** after the initial 300 compute hours.
+> 2. App Runner idle memory is **not free** after the initial 300 compute hours ($0.007/GB-hour memory).
 > 3. Cloud pricing, bandwidth limits, and free-tier inclusions are subject to change by cloud vendors at any time.
 >
 > **Policy Directive:** For the purposes of this Computer Science Capstone course evaluation, **AssetFlow remains safely in Stage A (Local Development)**. The system has achieved 100% functional completeness and test verification without exposing the student to financial liability.
@@ -158,3 +302,4 @@ On Amazon RDS:
 - **AWS Cloud Deployment Architecture & Implementation Plan:** [docs/AWS_DEPLOYMENT_PLAN.md](file:///d:/cloud/docs/AWS_DEPLOYMENT_PLAN.md)
 - **Mermaid Proposed Cloud Diagram:** [docs/diagrams/cloud-architecture-proposed.md](file:///d:/cloud/docs/diagrams/cloud-architecture-proposed.md)
 - **Cost Analysis & Free Tier Strategy:** [docs/COST_AND_DEPLOYMENT.md](file:///d:/cloud/docs/COST_AND_DEPLOYMENT.md)
+

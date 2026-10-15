@@ -155,7 +155,7 @@ class ReportService {
         l.total_quantity, l.used_quantity,
         (l.total_quantity - l.used_quantity) AS available_quantity,
         CASE
-          WHEN l.total_quantity > 0 THEN ROUND((CAST(l.used_quantity AS REAL) / l.total_quantity) * 100, 1)
+          WHEN l.total_quantity > 0 THEN ROUND((l.used_quantity * 100.0 / l.total_quantity), 1)
           ELSE 0
         END AS utilization_percent,
         l.expiry_date, l.renewal_status

@@ -7,7 +7,26 @@
  * - Never prints passwords, tokens, cookies, or sensitive secrets in logs.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+/**
+ * Resolves the configured API Base URL from Vite environment variables.
+ * Prioritizes VITE_API_BASE_URL, falls back to legacy VITE_API_URL, or defaults to empty string ('').
+ * Automatically strips trailing slashes for clean endpoint concatenation.
+ */
+export function getApiBaseUrl() {
+  const env = import.meta.env || {};
+  const rawUrl = env.VITE_API_BASE_URL ?? env.VITE_API_URL ?? '';
+  return typeof rawUrl === 'string' ? rawUrl.trim().replace(/\/+$/, '') : '';
+}
+
+/**
+ * Builds the fully-qualified API URL for a given relative endpoint path.
+ * In local development (empty base URL), returns relative path for Vite dev server proxying.
+ */
+export function buildApiUrl(endpoint) {
+  const baseUrl = getApiBaseUrl();
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${baseUrl}${cleanEndpoint}`;
+}
 
 class ApiError extends Error {
   constructor(message, status = 500, data = null) {
@@ -26,7 +45,7 @@ export function registerUnauthorizedHandler(handler) {
 }
 
 async function request(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const url = buildApiUrl(endpoint);
 
   const headers = {
     'Accept': 'application/json',

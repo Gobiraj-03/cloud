@@ -31,9 +31,12 @@ async function authenticate(req, res, next) {
     const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
     if (stateChangingMethods.includes(req.method)) {
       const isProduction = process.env.NODE_ENV === 'production';
-      const expectedOrigin = process.env.CORS_ORIGIN || (isProduction ? null : 'http://localhost:5173');
+      const rawOrigin = process.env.CORS_ORIGIN;
+      const allowedOrigins = rawOrigin
+        ? rawOrigin.split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean)
+        : (isProduction ? [] : ['http://localhost:5173']);
 
-      if (isProduction && !process.env.CORS_ORIGIN) {
+      if (isProduction && allowedOrigins.length === 0) {
         return res.status(403).json({
           success: false,
           error: 'Security misconfiguration: CORS_ORIGIN is not configured in production.'
@@ -46,10 +49,10 @@ async function authenticate(req, res, next) {
         try {
           requestOrigin = new URL(originHeader).origin;
         } catch {
-          requestOrigin = originHeader;
+          requestOrigin = originHeader.replace(/\/+$/, '');
         }
 
-        if (requestOrigin !== expectedOrigin) {
+        if (!allowedOrigins.includes(requestOrigin)) {
           return res.status(403).json({
             success: false,
             error: 'Cross-site request blocked (CSRF validation failure).'

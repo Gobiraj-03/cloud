@@ -286,3 +286,4 @@
 2. Relational databases with ACID transactions and constraints are crucial for preventing business state inconsistencies (such as phantom asset custody or license over-allocation).
 3. Cloud architecture requires understanding physical constraints: the transition from local SQLite to cloud containers mandates migrating to persistent managed databases (like Amazon RDS) due to container filesystem ephemerality.
 4. Comprehensive automated test suites (151 tests) allow rapid, confident refactoring without regressions.
+

@@ -12,20 +12,39 @@ const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandl
 
 const app = express();
 
-// Security and utility middleware: Strict CORS origin validation
+// Trust reverse proxy (e.g. AWS App Runner, ALB, CloudFront) for correct client IP & HTTPS detection
 const isProduction = process.env.NODE_ENV === 'production';
-const allowedOrigin = process.env.CORS_ORIGIN || (isProduction ? null : 'http://localhost:5173');
+if (isProduction || process.env.TRUST_PROXY) {
+  const hops = process.env.TRUST_PROXY ? (parseInt(process.env.TRUST_PROXY, 10) || 1) : 1;
+  app.set('trust proxy', hops);
+}
+
+// Security and utility middleware: Strict CORS origin validation
+// Supports single origin, multiple comma-separated origins, and trailing slash normalization
+function getAllowedOrigins() {
+  const raw = process.env.CORS_ORIGIN;
+  if (!raw) {
+    return isProduction ? [] : ['http://localhost:5173'];
+  }
+  return raw
+    .split(',')
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+}
 
 app.use(cors({
   origin: function (origin, callback) {
     // Non-browser requests without origin header (e.g., automated tests, server health checks)
     if (!origin) return callback(null, true);
 
-    if (isProduction && !process.env.CORS_ORIGIN) {
+    const allowedOrigins = getAllowedOrigins();
+
+    if (isProduction && allowedOrigins.length === 0) {
       return callback(new Error('CORS misconfiguration: CORS_ORIGIN must be explicitly defined in production.'));
     }
 
-    if (origin === allowedOrigin) {
+    const normalizedOrigin = origin.replace(/\/+$/, '');
+    if (allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
 
